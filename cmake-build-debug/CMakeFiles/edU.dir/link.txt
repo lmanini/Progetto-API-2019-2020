@@ -1,0 +1,1 @@
+/usr/bin/gcc -g   CMakeFiles/edU.dir/main.c.o  -o edU 
