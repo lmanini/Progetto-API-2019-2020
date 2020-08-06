@@ -4,9 +4,9 @@
 #include <string.h>
 
 //Defines
-#define CAPACITY 1000
-#define UNDO_STACK 'u'
-#define REDO_STACK 'r'
+#define STACK_CAPACITY 1000
+#define MAX_INPUT_SIZE 1024
+
 /*
  * Basic functioning of edU :
  *
@@ -18,17 +18,17 @@
 
 /*
  *************  TO DO LIST:  *************
- *  0. Implement all needed data structure manipulation functions
- *  1. Read input one line at a time
- *  2. Parse read line
+ *  0. Implement all needed data structure manipulation functions: Implemented
+ *  1. Read input one line at a time: Implemented
+ *  2. Parse read line: Implementing: double digit indexes throw off the parsing process.
  *  3. Inverse command generation
  *  4. Command functions
- *      4.1 C command
+ *      4.1 C command Implemented: creates new nodes and modifies old ones
  *      4.2 D command
- *      4.3 P command Implemented, yet to be tested
+ *      4.3 P command Implemented: prints initialized lines and . for non initialized lines
  *      4.4 U command
  *      4.5 R command
- *      4.6 Q command
+ *      4.6 Q command Implemented
  */
 
 //Data structs
@@ -56,7 +56,7 @@ int redoStackSize = 0;
 void pushUndo(char * str) {
 
     //Check stack overflow
-    if (undoStackSize >= CAPACITY) {
+    if (undoStackSize >= STACK_CAPACITY) {
         printf("Stack overflow, can't add more elements to undo stack\n");
         return;
     }
@@ -81,7 +81,7 @@ void pushUndo(char * str) {
 void pushRedo(char * str) {
 
     //Check stack overflow
-    if (redoStackSize >= CAPACITY) {
+    if (redoStackSize >= STACK_CAPACITY) {
         printf("Stack overflow, can't add more elements to redo stack\n");
         return;
     }
@@ -161,39 +161,118 @@ node * initializeList() {
     return temp;
 }
 
-void addRow(int index, char * str) {
+void addRow(node *head, int index1, int index2) {
 
+    char buffer[MAX_INPUT_SIZE];
+    int i = 1;
+    node *temp = head;
+
+    while (i < index1) {
+        temp = temp->next;
+        i++;
+    }
+
+    for (int j = 0; j < index2 - index1 + 1; j++) {
+
+        fgets(buffer, MAX_INPUT_SIZE, stdin);
+
+        if (!(temp->next)) {
+
+            node *newNode = malloc(sizeof(node));
+
+            newNode->next = NULL;
+            newNode->data = malloc(strlen(buffer) + 1);
+            strcpy(newNode->data, buffer);
+            temp->next = newNode;
+        } else {
+            realloc(temp->next->data, strlen(buffer) + 1);
+            strcpy(temp->next->data, buffer);
+        }
+
+        temp = temp->next;
+    }
 }
 
-node * deleteRow(int index) {
+node *deleteRow(node *head, int index1, int index2) {
 
+    return NULL;
 }
 
 void printRows(node * head, int index1, int index2) {
 
     //Index i starts at 1 because the first index of rows is 1, not 0
     int i = 1;
-    node * current = head;
+
+    node *temp = head;
 
     while (i <= index2) {
         if (i >= index1) {
-            if (!current) {
-                printf(".\n");
-            }
-            else {
-                printf("%s\n", current->data);
-            }
+            if (temp && temp->next) {
+                printf("%s", temp->next->data);
+            } else printf(".\n");
         }
         i++;
-        current = current->next;
+        if (temp->next) temp = temp->next;
     }
 }
 
 int main() {
 
     //Initializing empty linked list
-    node * head = initializeList();
+    node *head = malloc(sizeof(node));
+    head->data = malloc(MAX_INPUT_SIZE);
+    head->next = NULL;
 
+    //Initializing input buffer
+    char buffer[MAX_INPUT_SIZE];
+
+    //Read input
+    while (fgets(buffer, MAX_INPUT_SIZE, stdin)) {
+
+        //edU is terminated
+        if (buffer[0] == 'q')
+            return 0;
+
+        //Input read is either a c, d or p command
+        if (buffer[1] == ',') {
+
+            switch (buffer[3]) {
+
+                case 'c':
+                    addRow(head, buffer[0] - '0', buffer[2] - '0');
+                    break;
+
+                case 'd': //D command
+                    break;
+
+                case 'p':
+                    printRows(head, buffer[0] - '0', buffer[2] - '0');
+                    break;
+
+                default:
+                    break;
+            }
+
+        }
+
+            //Input read is either a u or r command
+        else {
+
+            switch (buffer[1]) {
+
+                case 'u' : //U command
+                    break;
+
+                case 'r' : //R command
+                    break;
+
+                default:
+                    break;
+            }
+
+        }
+
+    };
 
     return 0;
 }
