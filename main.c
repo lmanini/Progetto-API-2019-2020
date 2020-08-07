@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 //Defines
 #define STACK_CAPACITY 1000
@@ -24,7 +25,7 @@
  *  3. Inverse command generation
  *  4. Command functions
  *      4.1 C command Implemented: creates new nodes and modifies old ones
- *      4.2 D command
+ *      4.2 D command Implemented
  *      4.3 P command Implemented: prints initialized lines and . for non initialized lines
  *      4.4 U command
  *      4.5 R command
@@ -34,12 +35,12 @@
 //Data structs
 
 typedef struct node_t {
-    char * data;
-    struct node_t * next;
+    char *data;
+    struct node_t *next;
 } node;
 
-node * undoTop;
-node * redoTop;
+node *undoTop;
+node *redoTop;
 
 int undoStackSize = 0;
 int redoStackSize = 0;
@@ -53,7 +54,7 @@ int redoStackSize = 0;
 
 //Stack operations
 
-void pushUndo(char * str) {
+void pushUndo(char *str) {
 
     //Check stack overflow
     if (undoStackSize >= STACK_CAPACITY) {
@@ -62,10 +63,10 @@ void pushUndo(char * str) {
     }
 
     //Create new node
-    node * newNode = NULL;
+    node *newNode = NULL;
     newNode = malloc(sizeof(node));
-    newNode -> data = str;
-    newNode -> next = undoTop;
+    newNode->data = str;
+    newNode->next = undoTop;
 
     //Move reference to top element
     undoTop = newNode;
@@ -78,7 +79,7 @@ void pushUndo(char * str) {
 
 }
 
-void pushRedo(char * str) {
+void pushRedo(char *str) {
 
     //Check stack overflow
     if (redoStackSize >= STACK_CAPACITY) {
@@ -87,10 +88,10 @@ void pushRedo(char * str) {
     }
 
     //Create new node
-    node * newNode = NULL;
+    node *newNode = NULL;
     newNode = malloc(sizeof(node));
-    newNode -> data = str;
-    newNode -> next = redoTop;
+    newNode->data = str;
+    newNode->next = redoTop;
 
     //Move reference to top element
     redoTop = newNode;
@@ -103,7 +104,7 @@ void pushRedo(char * str) {
 
 }
 
-char * popUndo() {
+char *popUndo() {
 
     //Check stack underflow
     if (undoStackSize <= 0 || !undoTop) {
@@ -111,8 +112,8 @@ char * popUndo() {
     }
 
     //Save data of top element
-    node * temp = undoTop;
-    char * out = undoTop -> data;
+    node *temp = undoTop;
+    char *out = undoTop->data;
 
     //Move reference of top from the first node to the second one from the top
     undoTop = undoTop->next;
@@ -127,7 +128,7 @@ char * popUndo() {
     return out;
 }
 
-char * popRedo() {
+char *popRedo() {
 
     //Check stack underflow
     if (redoStackSize <= 0 || !redoTop) {
@@ -135,8 +136,8 @@ char * popRedo() {
     }
 
     //Save data of top element
-    node * temp = redoTop;
-    char * out = redoTop -> data;
+    node *temp = redoTop;
+    char *out = redoTop->data;
 
     //Move reference of top from the first node to the second one from the top
     redoTop = redoTop->next;
@@ -153,15 +154,7 @@ char * popRedo() {
 
 //List operations
 
-node * initializeList() {
-
-    node * temp = NULL;
-    temp = malloc(sizeof(node));
-
-    return temp;
-}
-
-void addRow(node *head, int index1, int index2) {
+void addRows(node *head, int index1, int index2) {
 
     char buffer[MAX_INPUT_SIZE];
     int i = 1;
@@ -174,34 +167,73 @@ void addRow(node *head, int index1, int index2) {
 
     for (int j = 0; j < index2 - index1 + 1; j++) {
 
-        fgets(buffer, MAX_INPUT_SIZE, stdin);
+        if (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
 
-        if (!(temp->next)) {
+            if (!(temp->next)) {
 
-            node *newNode = malloc(sizeof(node));
+                node *newNode = malloc(sizeof(node));
 
-            newNode->next = NULL;
-            newNode->data = malloc(strlen(buffer) + 1);
-            strcpy(newNode->data, buffer);
-            temp->next = newNode;
-        } else {
-            realloc(temp->next->data, strlen(buffer) + 1);
-            strcpy(temp->next->data, buffer);
+                newNode->next = NULL;
+                newNode->data = malloc(MAX_INPUT_SIZE + 1);
+                strcpy(newNode->data, buffer);
+                temp->next = newNode;
+            } else {
+                strcpy(temp->next->data, buffer);
+            }
+
+            temp = temp->next;
         }
-
-        temp = temp->next;
     }
 }
 
-node *deleteRow(node *head, int index1, int index2) {
+void deleteRows(node *head, int index1, int index2) {
 
-    return NULL;
+    node *curr = head, *temp;
+    int count;
+    int nodesToDelete = index2 - index1 + 1;
+
+    if (index1 == 0 && index2 == 0) {
+        //Push the command to undo stack
+        return;
+    }
+
+    //Main loop that traverses the list
+    while (curr && nodesToDelete != 0) {
+
+        //Skip index1 - 1 nodes
+        for (count = 1; count < index1 && curr != NULL; count++) curr = curr->next;
+
+        //If I reached the end of the list, return
+        if (!curr) return;
+
+        //Start from next node and delete index2 - index1 + 1 nodes
+        temp = curr->next;
+        for (count = 1; count <= (index2 - index1 + 1) && temp != NULL; count++) {
+
+            node *t = temp;
+            temp = temp->next;
+            free(t);
+
+        }
+        //Link the previous list to remaining nodes
+        curr->next = temp;
+
+        //Set pointer for next iteration
+        curr = temp;
+
+        nodesToDelete--;
+    }
 }
 
-void printRows(node * head, int index1, int index2) {
+void printRows(node *head, int index1, int index2) {
 
     //Index i starts at 1 because the first index of rows is 1, not 0
     int i = 1;
+
+    if (index1 == 0 && index2 == 0) {
+        printf(".\n");
+        return;
+    }
 
     node *temp = head;
 
@@ -209,7 +241,9 @@ void printRows(node * head, int index1, int index2) {
         if (i >= index1) {
             if (temp && temp->next) {
                 printf("%s", temp->next->data);
-            } else printf(".\n");
+            } else {
+                printf(".\n");
+            }
         }
         i++;
         if (temp->next) temp = temp->next;
@@ -218,61 +252,81 @@ void printRows(node * head, int index1, int index2) {
 
 int main() {
 
+    //Initializing index and flag variables
+    int begin;
+    int end;
+    bool comma;
+
     //Initializing empty linked list
     node *head = malloc(sizeof(node));
-    head->data = malloc(MAX_INPUT_SIZE);
+    head->data = malloc(MAX_INPUT_SIZE + 1);
     head->next = NULL;
 
     //Initializing input buffer
     char buffer[MAX_INPUT_SIZE];
 
-    //Read input
-    while (fgets(buffer, MAX_INPUT_SIZE, stdin)) {
+    /*
+     * Main loop:
+     * 1. Read input
+     * 2. Parse input
+     * 3. Execute desired command
+     */
+
+    //1.
+    while (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
+
+        if (buffer[0] == '.') continue;
 
         //edU is terminated
-        if (buffer[0] == 'q')
-            return 0;
+        if (buffer[0] == 'q') return 0;
 
-        //Input read is either a c, d or p command
-        if (buffer[1] == ',') {
+        /***** Parsing of command *****/
+        //2.
 
-            switch (buffer[3]) {
+        //Initial values
+        int i = 0;
+        begin = 0;
+        end = 0;
+        comma = false;
 
-                case 'c':
-                    addRow(head, buffer[0] - '0', buffer[2] - '0');
-                    break;
+        while (
+                buffer[i] != 'c' &&
+                buffer[i] != 'd' &&
+                buffer[i] != 'p' &&
+                buffer[i] != 'u' &&
+                buffer[i] != 'r'
+                ) {
 
-                case 'd': //D command
-                    break;
+            if (buffer[i] == ',') comma = true;
 
-                case 'p':
-                    printRows(head, buffer[0] - '0', buffer[2] - '0');
-                    break;
+            if (!comma) begin = begin * 10 + (buffer[i] - '0');
+            else if (buffer[i] != ',') end = end * 10 + (buffer[i] - '0');
 
-                default:
-                    break;
-            }
-
+            i++;
         }
 
-            //Input read is either a u or r command
-        else {
+        /***** End of parsing *****/
 
-            switch (buffer[1]) {
+        //3.
+        switch (buffer[i]) {
 
-                case 'u' : //U command
-                    break;
-
-                case 'r' : //R command
-                    break;
-
-                default:
-                    break;
-            }
-
+            case 'c':
+                addRows(head, begin, end);
+                break;
+            case 'd':
+                deleteRows(head, begin, end);
+                break;
+            case 'p':
+                printRows(head, begin, end);
+                break;
+            case 'u':
+                //undoCommand
+                break;
+            case 'r':
+                //redoCommand
+                break;
         }
 
-    };
-
+    }
     return 0;
 }
