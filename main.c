@@ -39,6 +39,8 @@ typedef struct node_t {
     struct node_t *next;
 } node;
 
+int listSize = 0;
+
 node *undoTop;
 node *redoTop;
 
@@ -154,16 +156,19 @@ char *popRedo() {
 
 //List operations
 
-void addRows(node *head, int index1, int index2) {
+void addRows(node *head, node **tail, int index1, int index2) {
 
     char buffer[MAX_INPUT_SIZE];
     int i = 1;
     node *temp = head;
 
-    while (i < index1) {
-        temp = temp->next;
-        i++;
-    }
+    if (index1 > listSize) {
+        temp = *tail;
+    } else
+        while (i < index1) {
+            temp = temp->next;
+            i++;
+        }
 
     for (int j = 0; j < index2 - index1 + 1; j++) {
 
@@ -178,6 +183,10 @@ void addRows(node *head, int index1, int index2) {
                 strcpy(newNode->data, buffer);
                 temp->next = newNode;
 
+                listSize += 1;
+
+                *tail = newNode;
+
             } else {
                 //Reallocate memory and modify existing node's content
                 temp->next->data = realloc(temp->next->data, strlen(buffer) + 1);
@@ -189,25 +198,25 @@ void addRows(node *head, int index1, int index2) {
     }
 }
 
-void deleteRows(node *head, int index1, int index2) {
+void deleteRows(node *head, node **tail, int index1, int index2) {
 
     node *curr = head, *temp;
     int count;
     int nodesToDelete = index2 - index1 + 1;
 
-    if (index1 == 0 && index2 == 0) {
+    //0,0d has no effect, if index1 > listSize I don't have to delete anything
+    if ((index1 == 0 && index2 == 0) || index1 > listSize) {
         //Push the command to undo stack
         return;
     }
 
     //Main loop that traverses the list
-    while (curr && nodesToDelete != 0) {
+    if (curr) {
 
         //Skip index1 - 1 nodes
         for (count = 1; count < index1 && curr != NULL; count++) curr = curr->next;
 
-        //If I reached the end of the list, return
-        if (!curr) return;
+        if (index2 >= listSize) *tail = curr;
 
         //Start from next node and delete index2 - index1 + 1 nodes
         temp = curr->next;
@@ -221,22 +230,23 @@ void deleteRows(node *head, int index1, int index2) {
         //Link the previous list to remaining nodes
         curr->next = temp;
 
-        //Set pointer for next iteration
-        curr = temp;
-
-        nodesToDelete--;
     }
+
+    //Update listSize
+    listSize -= index2 - index1 + 1;
+
+    if (listSize < 0) listSize = 0;
 }
 
 void printRows(node *head, int index1, int index2) {
-
-    //Index i starts at 1 because the first index of rows is 1, not 0
-    int i = 1;
 
     if (index1 == 0 && index2 == 0) {
         printf(".\n");
         return;
     }
+
+    //Index i starts at 1 because the first index of rows is 1, not 0
+    int i = 1;
 
     node *temp = head;
 
@@ -264,6 +274,8 @@ int main() {
     node *head = malloc(sizeof(node));
     head->data = malloc(MAX_INPUT_SIZE + 1);
     head->next = NULL;
+
+    node *tail = head;
 
     //Initializing input buffer
     char buffer[MAX_INPUT_SIZE];
@@ -309,10 +321,10 @@ int main() {
         switch (buffer[i]) {
 
             case 'c':
-                addRows(head, begin, end);
+                addRows(head, &tail, begin, end);
                 break;
             case 'd':
-                deleteRows(head, begin, end);
+                deleteRows(head, &tail, begin, end);
                 break;
             case 'p':
                 printRows(head, begin, end);
