@@ -47,13 +47,6 @@ node *redoTop;
 int undoStackSize = 0;
 int redoStackSize = 0;
 
-/*
- * There's a big margin for code optimization here: these are basically the same functions written twice,
- * in order to be able to distinguish operations on the 2 stacks: the same can be accomplished using 2 functions
- * instead of 4 and initializing the stackSize and top pointer to be used according to which stack I have
- * to operate on
-*/
-
 //Stack operations
 
 void pushUndo(char *str) {
