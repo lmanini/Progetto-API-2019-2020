@@ -170,14 +170,17 @@ void addRows(node *head, int index1, int index2) {
         if (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
 
             if (!(temp->next)) {
-
+                //Create new node in list
                 node *newNode = malloc(sizeof(node));
 
                 newNode->next = NULL;
-                newNode->data = malloc(MAX_INPUT_SIZE + 1);
+                newNode->data = malloc(strlen(buffer) + 1);
                 strcpy(newNode->data, buffer);
                 temp->next = newNode;
+
             } else {
+                //Reallocate memory and modify existing node's content
+                temp->next->data = realloc(temp->next->data, strlen(buffer) + 1);
                 strcpy(temp->next->data, buffer);
             }
 
@@ -284,25 +287,20 @@ int main() {
         //2.
 
         //Initial values
-        int i = 0;
+        int i;
         begin = 0;
         end = 0;
         comma = false;
 
-        while (
-                buffer[i] != 'c' &&
-                buffer[i] != 'd' &&
-                buffer[i] != 'p' &&
-                buffer[i] != 'u' &&
-                buffer[i] != 'r'
-                ) {
+        //strlen(buffer) - 2 because I'm stopping just before hitting the char:
+        // -1 for this reason and -1 because I must consider '\0'
+        for (i = 0; i < strlen(buffer) - 2; i++) {
 
             if (buffer[i] == ',') comma = true;
 
             if (!comma) begin = begin * 10 + (buffer[i] - '0');
             else if (buffer[i] != ',') end = end * 10 + (buffer[i] - '0');
 
-            i++;
         }
 
         /***** End of parsing *****/
