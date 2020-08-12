@@ -196,6 +196,7 @@ void deleteRows(node *head, node **tail, int index1, int index2) {
     node *curr = head, *temp;
     int count;
     int nodesToDelete = index2 - index1 + 1;
+    int nodesDeleted = 0;
 
     //0,0d has no effect, if index1 > listSize I don't have to delete anything
     if ((index1 == 0 && index2 == 0) || index1 > listSize) {
@@ -213,11 +214,12 @@ void deleteRows(node *head, node **tail, int index1, int index2) {
 
         //Start from next node and delete index2 - index1 + 1 nodes
         temp = curr->next;
-        for (count = 1; count <= (index2 - index1 + 1) && temp != NULL; count++) {
+        for (count = 1; count <= nodesToDelete && temp != NULL; count++) {
 
             node *t = temp;
             temp = temp->next;
             free(t);
+            nodesDeleted++;
 
         }
         //Link the previous list to remaining nodes
@@ -226,9 +228,10 @@ void deleteRows(node *head, node **tail, int index1, int index2) {
     }
 
     //Update listSize
-    listSize -= index2 - index1 + 1;
-
-    if (listSize < 0) listSize = 0;
+    if (listSize < nodesDeleted) {
+        listSize = 0;
+        *tail = head;
+    } else listSize -= nodesDeleted;
 }
 
 void printRows(node *head, int index1, int index2) {
@@ -289,6 +292,7 @@ int main() {
         if (buffer[0] == 'q') return 0;
 
         /***** Parsing of command *****/
+        
         //2.
 
         //Initial values
