@@ -268,7 +268,7 @@ int main() {
 
     //Initializing empty linked list
     node *head = malloc(sizeof(node));
-    head->data = malloc(MAX_INPUT_SIZE + 1);
+    head->data = malloc(1);
     head->next = NULL;
 
     node *tail = head;
@@ -286,13 +286,14 @@ int main() {
     //1.
     while (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
 
+        //Ignore this input
         if (buffer[0] == '.') continue;
 
         //edU is terminated
         if (buffer[0] == 'q') return 0;
 
         /***** Parsing of command *****/
-        
+
         //2.
 
         //Initial values
@@ -328,9 +329,11 @@ int main() {
                 break;
             case 'u':
                 //undoCommand
+                printf("U command received");
                 break;
             case 'r':
                 //redoCommand
+                printf("R command received");
                 break;
         }
 
