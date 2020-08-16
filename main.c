@@ -21,7 +21,7 @@
  *************  TO DO LIST:  *************
  *  0. Implement all needed data structure manipulation functions: Implemented
  *  1. Read input one line at a time: Implemented
- *  2. Parse read line: Implementing: double digit indexes throw off the parsing process.
+ *  2. Parse read line: Implemented
  *  3. Inverse command generation
  *  4. Command functions
  *      4.1 C command Implemented: creates new nodes and modifies old ones
@@ -151,33 +151,46 @@ char *popRedo() {
 
 void addRows(node *head, node **tail, int index1, int index2) {
 
+    //Initializing necessary variables
     char buffer[MAX_INPUT_SIZE];
     int i = 1;
     node *temp = head;
 
+    //If I'll have to create new lines I'll surely start from the end
     if (index1 > listSize) {
         temp = *tail;
     } else
+        /*
+         * Else I'll travel to the first line I have to modify, starting from the head
+         *
+         * OPTIMIZATION AVAILABLE:
+         * Make the linked list a double linked list (add pointer to previous element) and based on
+         * index1 travel the list from the head or tail
+         */
         while (i < index1) {
             temp = temp->next;
             i++;
         }
 
+    //Iterate index2 - index1 + 1 times
     for (int j = 0; j < index2 - index1 + 1; j++) {
 
         if (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
 
+            //Create new node and add it to the list
             if (!(temp->next)) {
-                //Create new node in list
+
                 node *newNode = malloc(sizeof(node));
 
                 newNode->next = NULL;
                 newNode->data = malloc(strlen(buffer) + 1);
                 strcpy(newNode->data, buffer);
                 temp->next = newNode;
+    
+                //Update listSize
+                listSize++;
 
-                listSize += 1;
-
+                //Update tail
                 *tail = newNode;
 
             } else {
@@ -210,21 +223,22 @@ void deleteRows(node *head, node **tail, int index1, int index2) {
         //Skip index1 - 1 nodes
         for (count = 1; count < index1 && curr != NULL; count++) curr = curr->next;
 
+        //Set tail to current node if I will have to delete the current tail of the list
         if (index2 >= listSize) *tail = curr;
 
-        //Start from next node and delete index2 - index1 + 1 nodes
+        //Start from next node, delete index2 - index1 + 1 nodes and count how many nodes I actually deleted
         temp = curr->next;
         for (count = 1; count <= nodesToDelete && temp != NULL; count++) {
 
             node *t = temp;
             temp = temp->next;
             free(t);
+
             nodesDeleted++;
 
         }
         //Link the previous list to remaining nodes
         curr->next = temp;
-
     }
 
     //Update listSize
@@ -261,7 +275,7 @@ void printRows(node *head, int index1, int index2) {
 
 int main() {
 
-    //Initializing index and flag variables
+    //Initializing index and flag variables for parsing
     int begin;
     int end;
     bool comma;
