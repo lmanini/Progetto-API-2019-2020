@@ -5,7 +5,6 @@
 #include <stdbool.h>
 
 //Defines
-#define STACK_CAPACITY 1000
 #define MAX_INPUT_SIZE 1024
 
 /*
@@ -22,11 +21,11 @@
  *  0. Implement all needed data structure manipulation functions: Implemented
  *  1. Read input one line at a time: Implemented
  *  2. Parse read line: Implemented
- *  3. Inverse command generation
+ *  3. Inverse command generation: Implemented
  *  4. Command functions
- *      4.1 C command Implemented: creates new nodes and modifies old ones
+ *      4.1 C command Implemented
  *      4.2 D command Implemented
- *      4.3 P command Implemented: prints initialized lines and . for non initialized lines
+ *      4.3 P command Implemented
  *      4.4 U command
  *      4.5 R command
  *      4.6 Q command Implemented
@@ -34,131 +33,138 @@
 
 //Data structs
 
-typedef struct node_t {
+typedef struct {
+    int initialIndex;
+    int finalIndex;
+    char command;
+} commandType;
+
+typedef struct node_l {
     char *data;
-    struct node_t *next;
-} node;
+    struct node_l *next;
+    short unsigned int timesModified;
+} nodeLine;
+
+typedef struct node_c {
+    commandType command;
+    struct node_c *next;
+} stackCommand;
+
+typedef struct node_s {
+    nodeLine *subListHead;
+    struct node_s *next;
+} stackLine;
 
 int listSize = 0;
 
-node *undoTop;
-node *redoTop;
+stackLine *undoLinesTop = NULL;
+stackLine *redoLinesTop = NULL;
 
-int undoStackSize = 0;
-int redoStackSize = 0;
+int undoLinesSize = 0;
+int redoLinesSize = 0;
+
+stackCommand *undoCommandTop = NULL;
+stackCommand *redoCommandTop = NULL;
+
+int undoCommandSize = 0;
+int redoCommandSize = 0;
 
 //Stack operations
 
-void pushUndo(char *str) {
+void pushUndoLines(nodeLine *node) {
 
-    //Check stack overflow
-    if (undoStackSize >= STACK_CAPACITY) {
-        printf("Stack overflow, can't add more elements to undo stack\n");
-        return;
-    }
+    stackLine *newNode = NULL;
+    newNode = malloc(sizeof(stackLine));
+    newNode->subListHead = node;
+    newNode->next = undoLinesTop;
 
-    //Create new node
-    node *newNode = NULL;
-    newNode = malloc(sizeof(node));
-    newNode->data = str;
-    newNode->next = undoTop;
+    undoLinesTop = newNode;
 
-    //Move reference to top element
-    undoTop = newNode;
-
-    //Increment stack size
-    undoStackSize++;
-
-    //DB purposes
-    printf("Pushed node with %s content to undo stack\n", newNode->data);
-
+    undoLinesSize++;
 }
 
-void pushRedo(char *str) {
-
-    //Check stack overflow
-    if (redoStackSize >= STACK_CAPACITY) {
-        printf("Stack overflow, can't add more elements to redo stack\n");
-        return;
-    }
-
-    //Create new node
-    node *newNode = NULL;
-    newNode = malloc(sizeof(node));
-    newNode->data = str;
-    newNode->next = redoTop;
-
-    //Move reference to top element
-    redoTop = newNode;
-
-    //Increment stack size
-    redoStackSize++;
-
-    //DB purposes
-    printf("Pushed node with %s content to redo stack\n", newNode->data);
-
-}
-
-char *popUndo() {
-
-    //Check stack underflow
-    if (undoStackSize <= 0 || !undoTop) {
-        return "Error: Stack underflow";
-    }
+nodeLine *popUndoLines() {
 
     //Save data of top element
-    node *temp = undoTop;
-    char *out = undoTop->data;
+    stackLine *temp = undoLinesTop;
+    nodeLine *out = undoLinesTop->subListHead;
 
-    //Move reference of top from the first node to the second one from the top
-    undoTop = undoTop->next;
+    //Move reference of top from the first nodeLine to the second one from the top
+    undoLinesTop = undoLinesTop->next;
 
     //Free old top element
     free(temp);
 
     //Decrement stack size
-    undoStackSize--;
+    undoLinesSize--;
 
     //Return popped data
     return out;
 }
 
-char *popRedo() {
+void pushRedoLines(char *str) {
 
-    //Check stack underflow
-    if (redoStackSize <= 0 || !redoTop) {
-        return "Error: Stack underflow";
+}
+
+nodeLine *popRedoLines() {
+
+    nodeLine *out = NULL;
+
+    return out;
+}
+
+void pushUndoCommand(commandType command) {
+
+    stackCommand *newNode = NULL;
+    newNode = malloc(sizeof(stackCommand));
+    newNode->command = command;
+    newNode->next = undoCommandTop;
+
+    undoCommandTop = newNode;
+
+    undoCommandSize++;
+}
+
+//Utility
+
+commandType generateInverseCommand(commandType in) {
+
+    commandType out;
+    out.initialIndex = in.initialIndex;
+    out.finalIndex = in.finalIndex;
+
+    switch (in.command) {
+
+        case 'c':
+            out.command = 'x';
+            break;
+        case 'd':
+            out.command = 'y';
+            break;
+        case 'x':
+            out.command = 'c';
+            break;
+        case 'y':
+            out.command = 'd';
+            break;
     }
 
-    //Save data of top element
-    node *temp = redoTop;
-    char *out = redoTop->data;
-
-    //Move reference of top from the first node to the second one from the top
-    redoTop = redoTop->next;
-
-    //Free old top element
-    free(temp);
-
-    //Decrement stack size
-    redoStackSize--;
-
-    //Return popped data
     return out;
 }
 
 //List operations
 
-void addRows(node *head, node **tail, int index1, int index2) {
+void cCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
 
     //Initializing necessary variables
-    char buffer[MAX_INPUT_SIZE];
+    char buffer[MAX_INPUT_SIZE + 1];
     int i = 1;
-    node *temp = head;
+    nodeLine *curr = head, *toSave = NULL, *newNode = NULL, *temp = NULL;
+    bool firstDeletion = false;
 
     //If I'll have to create new lines I'll surely start from the end
     if (index1 > listSize) {
-        temp = *tail;
+        curr = *tail;
     } else
         /*
          * Else I'll travel to the first line I have to modify, starting from the head
@@ -168,7 +174,7 @@ void addRows(node *head, node **tail, int index1, int index2) {
          * index1 travel the list from the head or tail
          */
         while (i < index1) {
-            temp = temp->next;
+            curr = curr->next;
             i++;
         }
 
@@ -177,43 +183,57 @@ void addRows(node *head, node **tail, int index1, int index2) {
 
         if (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
 
-            //Create new node and add it to the list
-            if (!(temp->next)) {
+            //Create newNode
+            newNode = malloc(sizeof(nodeLine));
+            newNode->data = malloc(strlen(buffer) + 1);
+            strcpy(newNode->data, buffer);
 
-                node *newNode = malloc(sizeof(node));
-
+            if (!(curr->next)) {
+                //Adding node at the end of the list
+                curr->next = newNode;
+                *tail = newNode;
                 newNode->next = NULL;
-                newNode->data = malloc(strlen(buffer) + 1);
-                strcpy(newNode->data, buffer);
-                temp->next = newNode;
-    
+                newNode->timesModified = 0;
+
                 //Update listSize
                 listSize++;
-
-                //Update tail
-                *tail = newNode;
-
             } else {
-                //Reallocate memory and modify existing node's content
-                temp->next->data = realloc(temp->next->data, strlen(buffer) + 1);
-                strcpy(temp->next->data, buffer);
-            }
+                //Insert newNode in the middle of the list
+                if (!firstDeletion) {
+                    toSave = curr->next;
+                    firstDeletion = true;
+                }
+                temp = curr->next;
 
-            temp = temp->next;
+                curr->next = newNode;
+                newNode->next = temp->next;
+                newNode->timesModified = temp->timesModified + 1;
+
+                if (j == index2 - index1) {
+                    *tail = newNode;
+                    temp->next = NULL;
+                }
+            }
+            curr = curr->next;
         }
     }
+
+    //Push toSave to undoLineStack
+    if (toSave) {
+        pushUndoLines(toSave);
+    }
+
 }
 
-void deleteRows(node *head, node **tail, int index1, int index2) {
+void dCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
 
-    node *curr = head, *temp;
+    nodeLine *curr = head, *temp = NULL, *toSave = NULL;
     int count;
     int nodesToDelete = index2 - index1 + 1;
     int nodesDeleted = 0;
 
     //0,0d has no effect, if index1 > listSize I don't have to delete anything
     if ((index1 == 0 && index2 == 0) || index1 > listSize) {
-        //Push the command to undo stack
         return;
     }
 
@@ -223,17 +243,15 @@ void deleteRows(node *head, node **tail, int index1, int index2) {
         //Skip index1 - 1 nodes
         for (count = 1; count < index1 && curr != NULL; count++) curr = curr->next;
 
-        //Set tail to current node if I will have to delete the current tail of the list
+        //Set tail to current nodeLine if I will have to delete the current tail of the list
         if (index2 >= listSize) *tail = curr;
 
-        //Start from next node, delete index2 - index1 + 1 nodes and count how many nodes I actually deleted
+        //Start from next nodeLine, delete index2 - index1 + 1 nodes and count how many nodes I actually deleted
+        toSave = curr->next;
         temp = curr->next;
         for (count = 1; count <= nodesToDelete && temp != NULL; count++) {
 
-            node *t = temp;
             temp = temp->next;
-            free(t);
-
             nodesDeleted++;
 
         }
@@ -246,9 +264,13 @@ void deleteRows(node *head, node **tail, int index1, int index2) {
         listSize = 0;
         *tail = head;
     } else listSize -= nodesDeleted;
+
+    if (toSave) {
+        pushUndoLines(toSave);
+    }
 }
 
-void printRows(node *head, int index1, int index2) {
+void pCommand(nodeLine *head, int index1, int index2) {
 
     if (index1 == 0 && index2 == 0) {
         printf(".\n");
@@ -258,7 +280,7 @@ void printRows(node *head, int index1, int index2) {
     //Index i starts at 1 because the first index of rows is 1, not 0
     int i = 1;
 
-    node *temp = head;
+    nodeLine *temp = head;
 
     while (i <= index2) {
         if (i >= index1) {
@@ -276,19 +298,19 @@ void printRows(node *head, int index1, int index2) {
 int main() {
 
     //Initializing index and flag variables for parsing
-    int begin;
-    int end;
+    commandType currentCommand;
     bool comma;
+    int i, undoCounter = 0, redoCounter = 0;
 
     //Initializing empty linked list
-    node *head = malloc(sizeof(node));
+    nodeLine *head = malloc(sizeof(nodeLine));
     head->data = malloc(1);
     head->next = NULL;
 
-    node *tail = head;
+    nodeLine *tail = head;
 
     //Initializing input buffer
-    char buffer[MAX_INPUT_SIZE];
+    char buffer[MAX_INPUT_SIZE + 1];
 
     /*
      * Main loop:
@@ -311,9 +333,8 @@ int main() {
         //2.
 
         //Initial values
-        int i;
-        begin = 0;
-        end = 0;
+        currentCommand.initialIndex = 0;
+        currentCommand.finalIndex = 0;
         comma = false;
 
         //strlen(buffer) - 2 because I'm stopping just before hitting the char:
@@ -322,34 +343,46 @@ int main() {
 
             if (buffer[i] == ',') comma = true;
 
-            if (!comma) begin = begin * 10 + (buffer[i] - '0');
-            else if (buffer[i] != ',') end = end * 10 + (buffer[i] - '0');
-
+            if (!comma) {
+                currentCommand.initialIndex = currentCommand.initialIndex * 10 + (buffer[i] - '0');
+            } else if (buffer[i] != ',') {
+                currentCommand.finalIndex = currentCommand.finalIndex * 10 + (buffer[i] - '0');
+            }
         }
+
+        currentCommand.command = buffer[i];
 
         /***** End of parsing *****/
 
         //3.
-        switch (buffer[i]) {
+        switch (currentCommand.command) {
 
             case 'c':
-                addRows(head, &tail, begin, end);
+                pushUndoCommand(generateInverseCommand(currentCommand));
+                cCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
             case 'd':
-                deleteRows(head, &tail, begin, end);
+                pushUndoCommand(generateInverseCommand(currentCommand));
+                dCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
             case 'p':
-                printRows(head, begin, end);
+                pCommand(head, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
             case 'u':
-                //undoCommand
-                printf("U command received");
+                if (currentCommand.initialIndex > undoCommandSize) {
+                    currentCommand.initialIndex = undoCommandSize;
+                }
+                undoCounter += currentCommand.initialIndex;
                 break;
             case 'r':
-                //redoCommand
-                printf("R command received");
+                if (currentCommand.initialIndex > undoCounter) {
+                    currentCommand.initialIndex = undoCounter;
+                }
+                redoCounter += currentCommand.initialIndex;
                 break;
         }
+
+        printf("counter = %d\n", undoCounter - redoCounter);
 
     }
     return 0;
