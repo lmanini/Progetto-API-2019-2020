@@ -271,7 +271,7 @@ void cCommand(nodeLine *head, nodeLine **tail, int index1, int index2, bool from
                     newNode->timesModified = temp->timesModified + 1;
 
                     if (j == index2 - index1) {
-                        if (index2 > listSize) *tail = newNode;
+                        if (index2 >= listSize) *tail = newNode;
                         temp->next = NULL;
                     }
                 }
@@ -639,15 +639,6 @@ int main() {
                 break;
             case 'd':
 
-                //Sanify input
-                if ((currentCommand.initialIndex == 0 && currentCommand.finalIndex == 0) ||
-                    currentCommand.initialIndex > listSize) {
-                    currentCommand.initialIndex = 0;
-                    currentCommand.finalIndex = 0;
-                } else if (currentCommand.finalIndex > listSize) {
-                    currentCommand.finalIndex = listSize;
-                }
-
                 //Execute undo if I have to
                 if (undoCounter > 0) {
                     undo(head, &tail, undoCounter);
@@ -656,6 +647,15 @@ int main() {
                     undoCounter *= -1;
                     redo(head, &tail, undoCounter);
                     undoCounter = 0;
+                }
+
+                //Sanify input
+                if ((currentCommand.initialIndex == 0 && currentCommand.finalIndex == 0) ||
+                    currentCommand.initialIndex > listSize) {
+                    currentCommand.initialIndex = 0;
+                    currentCommand.finalIndex = 0;
+                } else if (currentCommand.finalIndex > listSize) {
+                    currentCommand.finalIndex = listSize;
                 }
 
                 //Execute dCommand
@@ -677,12 +677,14 @@ int main() {
                 if (undoCounter > 0) {
                     undo(head, &tail, undoCounter);
                     undoCounter = 0;
+                    maxUndo = undoCommandSize;
                 } else if (undoCounter < 0) {
                     undoCounter *= -1;
                     redo(head, &tail, undoCounter);
                     undoCounter = 0;
+                    maxUndo = undoCommandSize;
                 }
-
+                
                 pCommand(head, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
             case 'u':
