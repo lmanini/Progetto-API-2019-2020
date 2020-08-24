@@ -372,7 +372,7 @@ void dCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
 void pCommand(nodeLine *head, int index1, int index2) {
 
     if (index1 == 0 && index2 == 0) {
-        printf(".\n");
+        fputs(".\n", stdout);
         return;
     }
 
@@ -386,9 +386,9 @@ void pCommand(nodeLine *head, int index1, int index2) {
     while (i <= index2) {
         if (i >= index1) {
             if (temp && temp->next) {
-                printf("%s", temp->next->data);
+                fputs(temp->next->data, stdout);
             } else {
-                printf(".\n");
+                fputs(".\n", stdout);
             }
         }
         i++;
@@ -555,7 +555,7 @@ int main() {
     //Initializing index and flag variables for parsing
     commandType currentCommand;
     bool comma;
-    int i, undoCounter = 0, redoCounter = 0;
+    int i, undoCounter = 0, redoCounter = 0, maxUndo = 0, maxRedo = 0;
 
     //Initializing empty linked list
     nodeLine *head = malloc(sizeof(nodeLine));
@@ -613,11 +613,33 @@ int main() {
         switch (currentCommand.command) {
 
             case 'c':
-                pushUndoCommand(generateInverseCommand(currentCommand));
+
+                //Execute undo if I have to
+                if (undoCounter > 0) {
+                    undo(head, &tail, undoCounter);
+                    undoCounter = 0;
+                } else if (undoCounter < 0) {
+                    undoCounter *= -1;
+                    redo(head, &tail, undoCounter);
+                    undoCounter = 0;
+                }
+
+                //Execute cCommand
                 cCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex, false);
+
+                //Push inverse command to undoCommand stack
+                pushUndoCommand(generateInverseCommand(currentCommand));
+
+                //Set max number of valid undos and redos
+                maxUndo = undoCommandSize;
+                maxRedo = 0;
+
+                //Clear redo stacks
+
                 break;
             case 'd':
 
+                //Sanify input
                 if ((currentCommand.initialIndex == 0 && currentCommand.finalIndex == 0) ||
                     currentCommand.initialIndex > listSize) {
                     currentCommand.initialIndex = 0;
@@ -626,20 +648,65 @@ int main() {
                     currentCommand.finalIndex = listSize;
                 }
 
-                pushUndoCommand(generateInverseCommand(currentCommand));
+                //Execute undo if I have to
+                if (undoCounter > 0) {
+                    undo(head, &tail, undoCounter);
+                    undoCounter = 0;
+                } else if (undoCounter < 0) {
+                    undoCounter *= -1;
+                    redo(head, &tail, undoCounter);
+                    undoCounter = 0;
+                }
+
+                //Execute dCommand
                 dCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex);
+
+                //Push inverse command to undoCommand stack
+                pushUndoCommand(generateInverseCommand(currentCommand));
+
+                //Set max number of valid undos and redos
+                maxUndo = undoCommandSize;
+                maxRedo = 0;
+
+                //Clear redo stacks
+
                 break;
             case 'p':
+
+                //Execute undo if I have to
+                if (undoCounter > 0) {
+                    undo(head, &tail, undoCounter);
+                    undoCounter = 0;
+                } else if (undoCounter < 0) {
+                    undoCounter *= -1;
+                    redo(head, &tail, undoCounter);
+                    undoCounter = 0;
+                }
+
                 pCommand(head, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
             case 'u':
-                undo(head, &tail, currentCommand.initialIndex);
+                if (currentCommand.initialIndex >= maxUndo) {
+                    undoCounter += maxUndo;
+                    maxRedo += maxUndo;
+                    maxUndo = 0;
+                } else {
+                    undoCounter += currentCommand.initialIndex;
+                    maxRedo += currentCommand.initialIndex;
+                    maxUndo -= currentCommand.initialIndex;
+                }
                 break;
             case 'r':
-                redo(head, &tail, currentCommand.initialIndex);
-                break;
+                if (currentCommand.initialIndex >= maxRedo) {
+                    undoCounter -= maxRedo;
+                    maxUndo = undoCommandSize;
+                    maxRedo = 0;
+                } else {
+                    undoCounter -= currentCommand.initialIndex;
+                    maxRedo -= currentCommand.initialIndex;
+                    maxUndo += currentCommand.initialIndex;
+                }
         }
-
     }
     return 0;
 }
