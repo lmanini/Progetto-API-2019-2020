@@ -45,11 +45,6 @@ typedef struct node_l {
     short unsigned int timesModified;
 } nodeLine;
 
-typedef struct node_c {
-    commandType command;
-    struct node_c *next;
-} stackCommand;
-
 typedef struct node_s {
     nodeLine *subListHead;
     struct node_s *next;
@@ -63,11 +58,11 @@ stackLine *redoLinesTop = NULL;
 int undoLinesSize = 0;
 int redoLinesSize = 0;
 
-stackCommand *undoCommandTop = NULL;
-stackCommand *redoCommandTop = NULL;
+commandType *commandHistory;
 
-int undoCommandSize = 0;
-int redoCommandSize = 0;
+int commandHistorySize = 0;
+int commandHistoryCurrentCommand = 0;
+long int commandHistoryMaxElements = 1000000;
 
 //Stack operations
 
@@ -93,7 +88,7 @@ nodeLine *popUndoLines() {
     undoLinesTop = undoLinesTop->next;
 
     //Free old top element
-    free(temp);
+    //free(temp);
 
     //Decrement stack size
     undoLinesSize--;
@@ -121,72 +116,27 @@ nodeLine *popRedoLines() {
 
     redoLinesTop = redoLinesTop->next;
 
-    free(temp);
+    //free(temp);
 
     redoLinesSize--;
 
     return out;
 }
 
-void pushUndoCommand(commandType in) {
+void pushCommand(commandType in) {
 
-    stackCommand *newNode = NULL;
-    newNode = malloc(sizeof(stackCommand));
-    newNode->command = in;
-    newNode->next = undoCommandTop;
+    commandHistory[commandHistorySize] = in;
+    commandHistorySize++;
+    commandHistoryCurrentCommand = commandHistorySize;
 
-    undoCommandTop = newNode;
-
-    undoCommandSize++;
-}
-
-commandType popUndoCommand() {
-
-    //Save output data
-    stackCommand *temp = undoCommandTop;
-    commandType out = undoCommandTop->command;
-
-    //Move link to top element
-    undoCommandTop = undoCommandTop->next;
-
-    //free memory
-    free(temp);
-
-    //Update stack size
-    undoCommandSize--;
-
-    return out;
-}
-
-void pushRedoCommand(commandType in) {
-
-    stackCommand *newNode = NULL;
-    newNode = malloc(sizeof(stackCommand));
-    newNode->command = in;
-    newNode->next = redoCommandTop;
-
-    redoCommandTop = newNode;
-
-    redoCommandSize++;
-}
-
-commandType popRedoCommand() {
-
-    stackCommand *temp = redoCommandTop;
-    commandType out = redoCommandTop->command;
-
-    redoCommandTop = redoCommandTop->next;
-
-    free(temp);
-
-    redoCommandSize--;
-
-    return out;
-
+    if (commandHistorySize >= commandHistoryMaxElements * 3 / 4) {
+        commandHistory = realloc(commandHistory, 2 * commandHistoryMaxElements);
+        commandHistoryMaxElements *= 2;
+    }
 }
 
 //Utility
-
+/*
 commandType generateInverseCommand(commandType in) {
 
     commandType out;
@@ -211,7 +161,7 @@ commandType generateInverseCommand(commandType in) {
 
     return out;
 }
-
+*/
 //List operations
 
 void cCommand(nodeLine *head, nodeLine **tail, int index1, int index2, bool fromRedo) {
@@ -314,7 +264,7 @@ void cCommand(nodeLine *head, nodeLine **tail, int index1, int index2, bool from
 
 void dCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
 
-    nodeLine *curr = head, *temp = NULL, *toSave = NULL;
+    nodeLine *curr = head, *temp = NULL, *toSaveHead = NULL, *toSaveTail = NULL;
     int count;
     int nodesToDelete;
     int nodesDeleted = 0;
@@ -338,24 +288,23 @@ void dCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
         if (index2 >= listSize) *tail = curr;
 
         //Start from next nodeLine, delete index2 - index1 + 1 nodes and count how many nodes I actually deleted
-        toSave = curr->next;
+        toSaveHead = curr->next;
+        toSaveTail = curr;
         temp = curr->next;
         for (count = 1; count <= nodesToDelete && temp != NULL; count++) {
 
             temp = temp->next;
             nodesDeleted++;
+            toSaveTail = toSaveTail->next;
 
         }
         //Link the previous list to remaining nodes
         curr->next = temp;
     }
 
+    //toSaveTail was introduce to optimize time use
     if (nodesDeleted > 0) {
-        temp = toSave;
-        for (count = 0; count < nodesDeleted - 1; count++) {
-            temp = temp->next;
-        }
-        temp->next = NULL;
+        toSaveTail->next = NULL;
     }
 
     //Update listSize
@@ -364,8 +313,8 @@ void dCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
         *tail = head;
     } else listSize -= nodesDeleted;
 
-    if (toSave) {
-        pushUndoLines(toSave);
+    if (toSaveHead) {
+        pushUndoLines(toSaveHead);
     }
 }
 
@@ -412,7 +361,7 @@ void xCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
     temp = curr->next;
 
     //if true, I'll have to change nodes or change + delete
-    if (temp->timesModified > 0) {
+    if (temp && temp->timesModified > 0) {
 
         //Pop head of old sublist and link to current list
         curr->next = popUndoLines();
@@ -422,6 +371,7 @@ void xCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
         while (fromStack->next) {
             fromStack = fromStack->next;
             temp = temp->next;
+            i++;
         }
 
         //If true I'll have no delete
@@ -432,10 +382,7 @@ void xCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
             //else I will certainly delete some nodes at the end of the current list
         else {
             *tail = fromStack;
-            while (temp->next) {
-                temp = temp->next;
-                listSize--;
-            }
+            listSize = i;
         }
 
     }
@@ -444,10 +391,7 @@ void xCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
         *tail = curr;
         (*tail)->next = NULL;
 
-        while (temp) {
-            temp = temp->next;
-            listSize--;
-        }
+        listSize = index1 - 1;
     }
 
     //If I have something to save, push it to redoLines stack
@@ -505,37 +449,30 @@ void undo(nodeLine *head, nodeLine **tail, int num) {
 
     commandType currentCommand;
 
-    if (num > undoCommandSize) num = undoCommandSize;
+    for (int i = 1; i <= num; i++) {
 
-    for (int i = 0; i < num; i++) {
-
-        currentCommand = popUndoCommand();
-        pushRedoCommand(generateInverseCommand(currentCommand));
-
+        currentCommand = commandHistory[commandHistoryCurrentCommand - i];
         switch (currentCommand.command) {
 
-            case 'x':
+            case 'c':
                 xCommand(head, tail, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
-            case 'y':
+            case 'd':
                 yCommand(head, tail, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
         }
-
     }
+
+    commandHistoryCurrentCommand -= num;
 }
 
 void redo(nodeLine *head, nodeLine **tail, int num) {
 
     commandType currentCommand;
 
-    if (num > redoCommandSize) num = redoCommandSize;
-
     for (int i = 0; i < num; i++) {
 
-        currentCommand = popRedoCommand();
-        pushUndoCommand(generateInverseCommand(currentCommand));
-
+        currentCommand = commandHistory[commandHistoryCurrentCommand + i];
         switch (currentCommand.command) {
 
             case 'c':
@@ -545,17 +482,18 @@ void redo(nodeLine *head, nodeLine **tail, int num) {
                 dCommand(head, tail, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
         }
-
     }
 
+    commandHistoryCurrentCommand += num;
 }
 
 int main() {
 
     //Initializing index and flag variables for parsing
     commandType currentCommand;
-    bool comma;
-    int i, undoCounter = 0, redoCounter = 0, maxUndo = 0, maxRedo = 0;
+    bool comma, didUndo;
+    int i, undoTarget = 0, redoCounter = 0, maxUndo = 0, maxRedo = 0;
+    commandHistory = malloc(commandHistoryMaxElements * sizeof(commandType));
 
     //Initializing empty linked list
     nodeLine *head = malloc(sizeof(nodeLine));
@@ -591,6 +529,7 @@ int main() {
         currentCommand.initialIndex = 0;
         currentCommand.finalIndex = 0;
         comma = false;
+        didUndo = false;
 
         //strlen(buffer) - 2 because I'm stopping just before hitting the char:
         // -1 for this reason and -1 because I must consider '\0'
@@ -615,38 +554,42 @@ int main() {
             case 'c':
 
                 //Execute undo if I have to
-                if (undoCounter > 0) {
-                    undo(head, &tail, undoCounter);
-                    undoCounter = 0;
-                } else if (undoCounter < 0) {
-                    undoCounter *= -1;
-                    redo(head, &tail, undoCounter);
-                    undoCounter = 0;
+                if (undoTarget - commandHistoryCurrentCommand < 0) {
+                    undo(head, &tail, commandHistoryCurrentCommand - undoTarget);
+                    didUndo = true;
+                } else if (undoTarget - commandHistoryCurrentCommand > 0) {
+                    redo(head, &tail, undoTarget - commandHistoryCurrentCommand);
+                    didUndo = true;
                 }
 
                 //Execute cCommand
                 cCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex, false);
 
-                //Push inverse command to undoCommand stack
-                pushUndoCommand(generateInverseCommand(currentCommand));
+                //
+                if (didUndo) {
+                    commandHistorySize = undoTarget;
+                    didUndo = false;
+                    //Clear redo stacks
+                    redoLinesSize = 0;
+                    redoLinesTop = NULL;
+                }
 
-                //Set max number of valid undos and redos
-                maxUndo = undoCommandSize;
-                maxRedo = 0;
+                commandHistorySize = commandHistoryCurrentCommand;
 
-                //Clear redo stacks
+                //Push command to commandHistory array
+                pushCommand(currentCommand);
+                undoTarget = commandHistoryCurrentCommand;
 
                 break;
             case 'd':
 
                 //Execute undo if I have to
-                if (undoCounter > 0) {
-                    undo(head, &tail, undoCounter);
-                    undoCounter = 0;
-                } else if (undoCounter < 0) {
-                    undoCounter *= -1;
-                    redo(head, &tail, undoCounter);
-                    undoCounter = 0;
+                if (undoTarget - commandHistoryCurrentCommand < 0) {
+                    undo(head, &tail, commandHistoryCurrentCommand - undoTarget);
+                    didUndo = true;
+                } else if (undoTarget - commandHistoryCurrentCommand > 0) {
+                    redo(head, &tail, undoTarget - commandHistoryCurrentCommand);
+                    didUndo = true;
                 }
 
                 //Sanify input
@@ -654,59 +597,58 @@ int main() {
                     currentCommand.initialIndex > listSize) {
                     currentCommand.initialIndex = 0;
                     currentCommand.finalIndex = 0;
-                } else if (currentCommand.finalIndex > listSize) {
+                } else if (currentCommand.initialIndex == 0) {
+                    currentCommand.initialIndex = 1;
+                }
+
+                if (currentCommand.finalIndex > listSize) {
                     currentCommand.finalIndex = listSize;
                 }
 
                 //Execute dCommand
                 dCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex);
 
-                //Push inverse command to undoCommand stack
-                pushUndoCommand(generateInverseCommand(currentCommand));
+                //
+                if (didUndo) {
+                    commandHistorySize = undoTarget;
+                    didUndo = false;
+                    //Clear redo stacks
+                    redoLinesSize = 0;
+                    redoLinesTop = NULL;
+                }
 
-                //Set max number of valid undos and redos
-                maxUndo = undoCommandSize;
-                maxRedo = 0;
+                commandHistorySize = commandHistoryCurrentCommand;
 
-                //Clear redo stacks
+                //Push command to commandHistory
+                pushCommand(currentCommand);
+                undoTarget = commandHistoryCurrentCommand;
 
                 break;
             case 'p':
 
                 //Execute undo if I have to
-                if (undoCounter > 0) {
-                    undo(head, &tail, undoCounter);
-                    undoCounter = 0;
-                    maxUndo = undoCommandSize;
-                } else if (undoCounter < 0) {
-                    undoCounter *= -1;
-                    redo(head, &tail, undoCounter);
-                    undoCounter = 0;
-                    maxUndo = undoCommandSize;
+                if (undoTarget - commandHistoryCurrentCommand < 0) {
+                    undo(head, &tail, commandHistoryCurrentCommand - undoTarget);
+                    commandHistoryCurrentCommand = undoTarget;
+                } else if (undoTarget - commandHistoryCurrentCommand > 0) {
+                    redo(head, &tail, undoTarget - commandHistoryCurrentCommand);
+                    commandHistoryCurrentCommand = undoTarget;
                 }
-                
+
                 pCommand(head, currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
             case 'u':
-                if (currentCommand.initialIndex >= maxUndo) {
-                    undoCounter += maxUndo;
-                    maxRedo += maxUndo;
-                    maxUndo = 0;
+                if (undoTarget - currentCommand.initialIndex <= 0) {
+                    undoTarget = 0;
                 } else {
-                    undoCounter += currentCommand.initialIndex;
-                    maxRedo += currentCommand.initialIndex;
-                    maxUndo -= currentCommand.initialIndex;
+                    undoTarget -= currentCommand.initialIndex;
                 }
                 break;
             case 'r':
-                if (currentCommand.initialIndex >= maxRedo) {
-                    undoCounter -= maxRedo;
-                    maxUndo = undoCommandSize;
-                    maxRedo = 0;
+                if (currentCommand.initialIndex + undoTarget >= commandHistorySize) {
+                    undoTarget = commandHistorySize;
                 } else {
-                    undoCounter -= currentCommand.initialIndex;
-                    maxRedo -= currentCommand.initialIndex;
-                    maxUndo += currentCommand.initialIndex;
+                    undoTarget += currentCommand.initialIndex;
                 }
         }
     }
