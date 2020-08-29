@@ -4,32 +4,8 @@
 #include <string.h>
 #include <stdbool.h>
 
-//Defines
 #define MAX_INPUT_SIZE 1024
-
-/*
- * Basic functioning of edU :
- *
- * 1. Read input one line at a time
- * 2. For each line, parse it, store the index(es) given and recognize what command is given
- * 3. Execute command
- * 4. Go back to 1.
- */
-
-/*
- *************  TO DO LIST:  *************
- *  0. Implement all needed data structure manipulation functions: Implemented
- *  1. Read input one line at a time: Implemented
- *  2. Parse read line: Implemented
- *  3. Inverse command generation: Implemented
- *  4. Command functions
- *      4.1 C command Implemented
- *      4.2 D command Implemented
- *      4.3 P command Implemented
- *      4.4 U command
- *      4.5 R command
- *      4.6 Q command Implemented
- */
+#define COMMAND_ARRAY_INITIAL_SIZE 1000000
 
 //Data structs
 
@@ -37,620 +13,668 @@ typedef struct {
     int initialIndex;
     int finalIndex;
     char command;
-} commandType;
+} CommandType;
 
 typedef struct node_l {
     char *data;
+    struct node_l *previous;
     struct node_l *next;
-    short unsigned int timesModified;
-} nodeLine;
+} ListNode;
 
 typedef struct node_s {
-    nodeLine *subListHead;
+    ListNode *subListHead;
+    ListNode *subListTail;
+    ListNode *headOfWhereToInsert;
+    ListNode *tailOfWhereToInsert;
+    int listSizeDelta;
     struct node_s *next;
-} stackLine;
+} StackNode;
 
+// List
+
+ListNode *listHead = NULL;
+ListNode *listTail = NULL;
 int listSize = 0;
 
-stackLine *undoLinesTop = NULL;
-stackLine *redoLinesTop = NULL;
+//Stacks
 
+StackNode *undoLinesTop = NULL;
+StackNode *redoLinesTop = NULL;
 int undoLinesSize = 0;
 int redoLinesSize = 0;
 
-commandType *commandHistory;
+void pushUndo(StackNode *newNode) {
 
-int commandHistorySize = 0;
-int commandHistoryCurrentCommand = 0;
-long int commandHistoryMaxElements = 1000000;
-
-//Stack operations
-
-void pushUndoLines(nodeLine *node) {
-
-    stackLine *newNode = NULL;
-    newNode = malloc(sizeof(stackLine));
-    newNode->subListHead = node;
     newNode->next = undoLinesTop;
-
     undoLinesTop = newNode;
-
     undoLinesSize++;
 }
 
-nodeLine *popUndoLines() {
+StackNode *popUndo() {
 
-    //Save data of top element
-    stackLine *temp = undoLinesTop;
-    nodeLine *out = undoLinesTop->subListHead;
-
-    //Move reference of top from the first nodeLine to the second one from the top
+    StackNode *out = undoLinesTop;
     undoLinesTop = undoLinesTop->next;
-
-    //Free old top element
-    //free(temp);
-
-    //Decrement stack size
     undoLinesSize--;
-
-    //Return popped data
     return out;
 }
 
-void pushRedoLines(nodeLine *node) {
+void pushRedo(StackNode *newNode) {
 
-    stackLine *newNode = NULL;
-    newNode = malloc(sizeof(stackLine));
-    newNode->subListHead = node;
     newNode->next = redoLinesTop;
-
     redoLinesTop = newNode;
-
     redoLinesSize++;
 }
 
-nodeLine *popRedoLines() {
+StackNode *popRedo() {
 
-    stackLine *temp = redoLinesTop;
-    nodeLine *out = redoLinesTop->subListHead;
-
+    StackNode *out = redoLinesTop;
     redoLinesTop = redoLinesTop->next;
-
-    //free(temp);
-
     redoLinesSize--;
-
     return out;
 }
 
-void pushCommand(commandType in) {
+//Array of commands
 
-    commandHistory[commandHistorySize] = in;
-    commandHistorySize++;
-    commandHistoryCurrentCommand = commandHistorySize;
+CommandType *commandArray;
+int commandArraySize = 0;
+int commandArrayCurrentCommand = 0;
+int undoTarget = 0;
+long int commandArrayNumberOfMaxElements = COMMAND_ARRAY_INITIAL_SIZE;
 
-    if (commandHistorySize >= commandHistoryMaxElements * 3 / 4) {
-        commandHistory = realloc(commandHistory, 2 * commandHistoryMaxElements);
-        commandHistoryMaxElements *= 2;
+void pushCommand(CommandType in) {
+    commandArray[commandArraySize] = in;
+    commandArraySize++;
+    commandArrayCurrentCommand = commandArraySize;
+    undoTarget = commandArrayCurrentCommand;
+
+    if (commandArraySize >= commandArrayNumberOfMaxElements * 3 / 4) {
+        commandArray = realloc(commandArray, 2 * commandArrayNumberOfMaxElements);
+        commandArrayNumberOfMaxElements *= 2;
     }
 }
 
-//Utility
-/*
-commandType generateInverseCommand(commandType in) {
+//Global buffer
+char buffer[MAX_INPUT_SIZE + 1];
 
-    commandType out;
-    out.initialIndex = in.initialIndex;
-    out.finalIndex = in.finalIndex;
+// Utility functions
 
-    switch (in.command) {
+ListNode *travelToNode(int indexOfTarget, int indexOfBegin, ListNode *nodeToBeginFrom) {
 
-        case 'c':
-            out.command = 'x';
-            break;
-        case 'd':
-            out.command = 'y';
-            break;
-        case 'x':
-            out.command = 'c';
-            break;
-        case 'y':
-            out.command = 'd';
-            break;
-    }
+    ListNode *temp = NULL;
+    int i;
+    int target = indexOfTarget - indexOfBegin + 1;
+    int partialSize = listSize - indexOfBegin + 1;
 
-    return out;
-}
-*/
-//List operations
+    if (indexOfTarget <= 0 || indexOfTarget > listSize) return NULL;
 
-void cCommand(nodeLine *head, nodeLine **tail, int index1, int index2, bool fromRedo) {
-
-    //Initializing necessary variables
-    char buffer[MAX_INPUT_SIZE + 1];
-    int i = 1;
-    nodeLine *curr = head, *toSave = NULL, *newNode = NULL, *temp = NULL;
-    bool firstDeletion = false;
-
-    //If I'll have to create new lines I'll surely start from the end
-    if (index1 > listSize) {
-        curr = *tail;
-    } else
-        /*
-         * Else I'll travel to the first line I have to modify, starting from the head
-         *
-         * OPTIMIZATION AVAILABLE:
-         * Make the linked list a double linked list (add pointer to previous element) and based on
-         * index1 travel the list from the head or tail
-         */
-        while (i < index1) {
-            curr = curr->next;
+    if (indexOfTarget == 1) {
+        return listHead;
+    } else if (indexOfTarget == listSize) {
+        return listTail;
+    } else if (2 * target <= partialSize) {
+        temp = nodeToBeginFrom;
+        i = indexOfBegin;
+        while (temp && i < indexOfTarget) {
+            temp = temp->next;
             i++;
         }
-
-    if (!fromRedo) {
-        //Iterate index2 - index1 + 1 times
-        for (int j = 0; j < index2 - index1 + 1; j++) {
-
-            if (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
-
-                //Create newNode
-                newNode = malloc(sizeof(nodeLine));
-                newNode->data = malloc(strlen(buffer) + 1);
-                strcpy(newNode->data, buffer);
-
-                if (!(curr->next)) {
-                    //Adding node at the end of the list
-                    curr->next = newNode;
-                    *tail = newNode;
-                    newNode->next = NULL;
-                    newNode->timesModified = 0;
-
-                    //Update listSize
-                    listSize++;
-                } else {
-                    //Insert newNode in the middle of the list
-                    if (!firstDeletion) {
-                        toSave = curr->next;
-                        firstDeletion = true;
-                    }
-                    temp = curr->next;
-
-                    curr->next = newNode;
-                    newNode->next = temp->next;
-                    newNode->timesModified = temp->timesModified + 1;
-
-                    if (j == index2 - index1) {
-                        if (index2 >= listSize) *tail = newNode;
-                        temp->next = NULL;
-                    }
-                }
-                curr = curr->next;
-            }
-        }
     } else {
-        //Save head of subList that's going back to undoLines stack
-        toSave = curr->next;
-        temp = curr->next;
-
-        //Pop and link subList from redoLines
-        curr->next = popRedoLines();
-
-        //Travel to end of popped subList and current list simultaneously
-        while (curr->next) {
-            curr = curr->next;
-            (*tail) = curr;
-            if (temp) temp = temp->next;
+        temp = listTail;
+        i = listSize;
+        while (temp && i > indexOfTarget) {
+            temp = temp->previous;
+            i--;
         }
-
-        //Link subList tail to old list
-        curr->next = temp;
-
-        //Break old list in order to keep only needed lines
-        if (temp) {
-            temp = temp->next;
-            temp = NULL;
-        }
-
-        if (index2 > listSize) listSize = index2;
     }
-
-    //Push toSave to undoLineStack
-    if (toSave) {
-        pushUndoLines(toSave);
-    }
-
+    return temp;
 }
 
-void dCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
+bool isDeleteInputValid(CommandType *in) {
+    if (in->initialIndex == 0 && in->finalIndex == 0) return false;
 
-    nodeLine *curr = head, *temp = NULL, *toSaveHead = NULL, *toSaveTail = NULL;
-    int count;
-    int nodesToDelete;
-    int nodesDeleted = 0;
-
-    //0,0d has no effect, if index1 > listSize I don't have to delete anything
-    if ((index1 == 0 && index2 == 0) || index1 > listSize) {
-        return;
+    if (in->initialIndex > listSize) {
+        in->initialIndex = 0;
+        in->finalIndex = 0;
+        return false;
     }
 
-    if (index1 == 0) index1 = 1;
+    if (in->finalIndex > listSize) in->finalIndex = listSize;
 
-    nodesToDelete = index2 - index1 + 1;
+    return true;
+}
 
-    //Main loop that traverses the list
-    if (curr) {
+ListNode *createNewLineNode() {
 
-        //Skip index1 - 1 nodes
-        for (count = 1; count < index1 && curr != NULL; count++) curr = curr->next;
+    fgets(buffer, MAX_INPUT_SIZE, stdin);
+    ListNode *out = malloc(sizeof(ListNode));
+    out->data = malloc(strlen(buffer) + 1);
+    strcpy(out->data, buffer);
+    out->previous = NULL;
+    out->next = NULL;
 
-        //Set tail to current nodeLine if I will have to delete the current tail of the list
-        if (index2 >= listSize) *tail = curr;
+    return out;
+}
 
-        //Start from next nodeLine, delete index2 - index1 + 1 nodes and count how many nodes I actually deleted
-        toSaveHead = curr->next;
-        toSaveTail = curr;
-        temp = curr->next;
-        for (count = 1; count <= nodesToDelete && temp != NULL; count++) {
+StackNode *createNewStackNode(ListNode *headOfSubList, ListNode *tailOfSubList,
+                              ListNode *whereToInsertHead, ListNode *whereToInsertTail,
+                              int listSizeDelta) {
 
-            temp = temp->next;
-            nodesDeleted++;
-            toSaveTail = toSaveTail->next;
+    StackNode *out = malloc(sizeof(StackNode));
 
+    out->subListHead = headOfSubList;
+    out->subListTail = tailOfSubList;
+    out->headOfWhereToInsert = whereToInsertHead;
+    out->tailOfWhereToInsert = whereToInsertTail;
+    out->listSizeDelta = listSizeDelta;
+
+    return out;
+}
+
+void replaceModifiedNodes(int index1, int index2, ListNode *headOfWhereToInsert, ListNode *tailOfWhereToInsert) {
+
+    ListNode *temp = NULL, *iterator = headOfWhereToInsert;
+    int nodesToBeAdded = index2 - index1 + 1;
+
+    if (index2 > listSize) listSize = index2;
+
+    for (int i = 0; i < nodesToBeAdded; i++) {
+
+        temp = createNewLineNode();
+
+        if (!iterator) {
+            //listHead must be modified
+            listHead = temp;
+        } else {
+            //Link new node
+            iterator->next = temp;
+            temp->previous = iterator;
         }
-        //Link the previous list to remaining nodes
-        curr->next = temp;
+        //Update headOfWhereToInsert
+        iterator = temp;
     }
 
-    //toSaveTail was introduce to optimize time use
-    if (nodesDeleted > 0) {
-        toSaveTail->next = NULL;
-    }
+    //Link to rest of list - tailOfWhereToInsert could be NULL
+    temp->next = tailOfWhereToInsert;
 
+    //Check for null
+    if (tailOfWhereToInsert) tailOfWhereToInsert->previous = temp;
+    else listTail = temp;
+}
+
+void insertFirstNodeInList(ListNode *node) {
+    listHead = node;
+    listTail = node;
+}
+
+void insertAtEndList(int index1, int index2) {
+
+    ListNode *temp = NULL;
+    int nodesToBeAdded = index2 - index1 + 1;
+
+    for (int i = 0; i < nodesToBeAdded; i++) {
+
+        temp = createNewLineNode();
+
+        //Insert first node if list is empty
+        if (!listHead) {
+            insertFirstNodeInList(temp);
+            continue;
+        }
+        //Append node to tail
+        temp->previous = listTail;
+        listTail->next = temp;
+
+        //Update listTail
+        listTail = temp;
+    }
     //Update listSize
-    if (listSize < nodesDeleted) {
-        listSize = 0;
-        *tail = head;
-    } else listSize -= nodesDeleted;
-
-    if (toSaveHead) {
-        pushUndoLines(toSaveHead);
-    }
+    listSize += nodesToBeAdded;
 }
 
-void pCommand(nodeLine *head, int index1, int index2) {
+void gatherInformationOnModifiedNodes(ListNode *headOfModifiedNodes, ListNode *tailOfModifiedNodes,
+                                      ListNode **previousOfModifiedNodes, ListNode **nextOfModifiedNodes) {
 
-    if (index1 == 0 && index2 == 0) {
-        fputs(".\n", stdout);
-        return;
-    }
+    if (headOfModifiedNodes) (*previousOfModifiedNodes) = headOfModifiedNodes->previous;
+    else (*previousOfModifiedNodes) = NULL;
+    if (tailOfModifiedNodes) (*nextOfModifiedNodes) = tailOfModifiedNodes->next;
+    else (*nextOfModifiedNodes) = NULL;
+}
 
-    if (index1 == 0) index1 = 1;
+CommandType parseCommand() {
 
-    //Index i starts at 1 because the first index of rows is 1, not 0
-    int i = 1;
+    CommandType out;
+    out.initialIndex = 0;
+    out.finalIndex = 0;
 
-    nodeLine *temp = head;
+    int i = 0;
 
-    while (i <= index2) {
-        if (i >= index1) {
-            if (temp && temp->next) {
-                fputs(temp->next->data, stdout);
-            } else {
-                fputs(".\n", stdout);
-            }
-        }
+    while (buffer[i] >= '0' && buffer[i] <= '9') {
+        out.initialIndex = out.initialIndex * 10 + (buffer[i] - '0');
         i++;
-        if (temp->next) temp = temp->next;
     }
+    //Skipping the comma if there is one
+    if (buffer[i] == ',') i++;
+
+    while (buffer[i] >= '0' && buffer[i] <= '9') {
+        out.finalIndex = out.finalIndex * 10 + (buffer[i] - '0');
+        i++;
+    }
+
+    out.command = buffer[i];
+    return out;
 }
 
-void xCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
+void commandArrayFixUp() {
+    commandArraySize = commandArrayCurrentCommand;
+    undoTarget = commandArrayCurrentCommand;
+}
 
-    int i = 1;
-    nodeLine *curr = head, *toSave = NULL, *temp = NULL, *fromStack = NULL;
+// edU commands
+
+void cCommandFromMain(int index1, int index2) {
+
+    ListNode *previousOfModifiedNodes = NULL, *nextOfModifiedNodes = NULL,
+            *tailOfModifiedNodes = NULL, *headOfModifiedNodes = NULL;
+    int listSizeDelta;
+
+    //Only creation of new nodes
+    if (index1 > listSize) {
+        previousOfModifiedNodes = listTail;
+        insertAtEndList(index1, index2);
+        listSizeDelta = index2 - index1 + 1;
+    }
+        //Modification and possible creation of nodes
+    else {
+        headOfModifiedNodes = travelToNode(index1, 1, listHead);
+        tailOfModifiedNodes = travelToNode(index2, index1, headOfModifiedNodes);
+        if (!tailOfModifiedNodes) tailOfModifiedNodes = listTail;
+
+        gatherInformationOnModifiedNodes(headOfModifiedNodes, tailOfModifiedNodes,
+                                         &previousOfModifiedNodes, &nextOfModifiedNodes);
+
+        if (index2 > listSize) listSizeDelta = index2 - listSize;
+        else listSizeDelta = 0;
+
+        //Replace the nodes in index1 and index2, linking them to previous and next node of the modified nodes
+        replaceModifiedNodes(index1, index2, previousOfModifiedNodes, nextOfModifiedNodes);
+    }
+    //Parametres are: head and tail of old subList, and the nodes to link them to to have O(1) undo
+    pushUndo(
+            createNewStackNode(headOfModifiedNodes, tailOfModifiedNodes,
+                               previousOfModifiedNodes, nextOfModifiedNodes, listSizeDelta)
+    );
+}
+
+void cCommandFromRedo() {
+
+    ListNode *headOfNewSubList = NULL, *tailOfNewSubList = NULL, *headOfOldSubList = NULL,
+            *tailOfOldSubList = NULL, *headOfWhereToInsert = NULL, *tailOfWhereToInsert = NULL;
+    StackNode *fromStack = popRedo();
+    fromStack->next = NULL;
+
+    headOfNewSubList = fromStack->subListHead;
+    tailOfNewSubList = fromStack->subListTail;
+    headOfWhereToInsert = fromStack->headOfWhereToInsert;
+    tailOfWhereToInsert = fromStack->tailOfWhereToInsert;
+
+
+    if (headOfWhereToInsert) headOfOldSubList = headOfWhereToInsert->next;
+    else headOfOldSubList = listHead;
+
+    if (tailOfWhereToInsert) tailOfOldSubList = tailOfWhereToInsert->previous;
+    else tailOfOldSubList = listTail;
+
+
+    if (!headOfWhereToInsert && !tailOfWhereToInsert) {
+        listHead = headOfNewSubList;
+        listTail = tailOfNewSubList;
+    } else if (!headOfWhereToInsert) {
+        listHead = headOfNewSubList;
+        tailOfNewSubList->next = tailOfWhereToInsert;
+        tailOfWhereToInsert->previous = tailOfNewSubList;
+    } else if (!tailOfWhereToInsert) {
+        listTail = tailOfNewSubList;
+        headOfNewSubList->previous = headOfWhereToInsert;
+        headOfWhereToInsert->next = headOfNewSubList;
+    } else {
+        headOfNewSubList->previous = headOfWhereToInsert;
+        headOfWhereToInsert->next = headOfNewSubList;
+        tailOfNewSubList->next = tailOfWhereToInsert;
+        tailOfWhereToInsert->previous = tailOfNewSubList;
+    }
+
+    //if (headOfOldSubList) headOfOldSubList->previous = NULL;
+    //if (tailOfOldSubList) tailOfOldSubList->next = NULL;
+    fromStack->subListHead = headOfOldSubList;
+    fromStack->subListTail = tailOfOldSubList;
+
+    listSize += fromStack->listSizeDelta;
+
+    pushUndo(fromStack);
+}
+
+void dCommandFromMain(int index1, int index2) {
+
+    int nodesToDelete = index2 - index1 + 1;
+    ListNode *headOfModifiedNodes = NULL, *tailOfModifiedNodes = NULL,
+            *previousOfModifiedNodes = NULL, *nextOfModifiedNodes = NULL;
 
     //Travel to interested nodes
-    while (i < index1) {
-        curr = curr->next;
-        i++;
-    }
+    headOfModifiedNodes = travelToNode(index1, 1, listHead);
+    tailOfModifiedNodes = travelToNode(index2, index1, headOfModifiedNodes);
 
-    //Save head of sublist to push to redoLines
-    toSave = curr->next;
-    temp = curr->next;
+    //Find hook points of interested nodes
+    gatherInformationOnModifiedNodes(headOfModifiedNodes, tailOfModifiedNodes,
+                                     &previousOfModifiedNodes, &nextOfModifiedNodes);
 
-    //if true, I'll have to change nodes or change + delete
-    if (temp && temp->timesModified > 0) {
-
-        //Pop head of old sublist and link to current list
-        curr->next = popUndoLines();
-        fromStack = curr->next;
-
-        //Travel to end of popped subList and current list simultaneously
-        while (fromStack->next) {
-            fromStack = fromStack->next;
-            temp = temp->next;
-            i++;
-        }
-
-        //If true I'll have no delete
-        if (index2 < listSize) {
-            fromStack->next = temp->next;
-            temp->next = NULL;
-        }
-            //else I will certainly delete some nodes at the end of the current list
-        else {
-            *tail = fromStack;
-            listSize = i;
-        }
-
-    }
-        //else I only have to delete
-    else {
-        *tail = curr;
-        (*tail)->next = NULL;
-
-        listSize = index1 - 1;
-    }
-
-    //If I have something to save, push it to redoLines stack
-    if (toSave) {
-        pushRedoLines(toSave);
-    }
-}
-
-void yCommand(nodeLine *head, nodeLine **tail, int index1, int index2) {
-
-    if (index1 == 0 && index2 == 0) return;
-
-    bool modifiedTail = false;
-    int i = 1;
-    nodeLine *curr = head, *temp = NULL, *fromStack = NULL;
-
-    if (index2 > listSize) modifiedTail = true;
-
-    if (index1 > listSize) {
-        curr = *tail;
-    } else
-        while (i < index1) {
-            curr = curr->next;
-            i++;
-        }
-
-    temp = curr->next;
-    fromStack = popUndoLines();
-
-    curr->next = fromStack;
-
-    if (temp) {
-        listSize += index2 - index1 + 1;
+    //Deletion logic
+    if (!previousOfModifiedNodes && !nextOfModifiedNodes) {
+        listHead = NULL;
+        listTail = NULL;
+    } else if (!previousOfModifiedNodes) {
+        listHead = nextOfModifiedNodes;
+        listHead->previous = NULL;
+    } else if (!nextOfModifiedNodes) {
+        listTail = previousOfModifiedNodes;
+        listTail->next = NULL;
     } else {
-        listSize = index2;
+        previousOfModifiedNodes->next = nextOfModifiedNodes;
+        nextOfModifiedNodes->previous = previousOfModifiedNodes;
     }
 
-    //Link end of subList to original list
-    while (fromStack->next) {
-        fromStack = fromStack->next;
-    }
+    //Trim old subList
+    //headOfModifiedNodes->previous = NULL;
+    //tailOfModifiedNodes->next = NULL;
 
-    fromStack->next = temp;
+    //Update listSize
+    listSize -= nodesToDelete;
 
-    if (modifiedTail) {
-        while (fromStack->next) fromStack = fromStack->next;
-        *tail = fromStack;
-    }
-
+    //nodesToDelete is passed as listSizeDelta
+    pushUndo(createNewStackNode(headOfModifiedNodes, tailOfModifiedNodes,
+                                previousOfModifiedNodes, nextOfModifiedNodes, nodesToDelete));
 }
 
-//Undo and redo
+void dCommandFromRedo() {
 
-void undo(nodeLine *head, nodeLine **tail, int num) {
+    ListNode *headOfNewSubList = NULL, *tailOfNewSubList = NULL, *headOfOldSubList = NULL,
+            *tailOfOldSubList = NULL, *headOfWhereToInsert = NULL, *tailOfWhereToInsert = NULL;
+    StackNode *fromStack = NULL;
 
-    commandType currentCommand;
+    fromStack = popRedo();
 
-    for (int i = 1; i <= num; i++) {
+    headOfWhereToInsert = fromStack->headOfWhereToInsert;
+    tailOfWhereToInsert = fromStack->tailOfWhereToInsert;
 
-        currentCommand = commandHistory[commandHistoryCurrentCommand - i];
-        switch (currentCommand.command) {
+    if (!headOfWhereToInsert) headOfOldSubList = listHead;
+    else headOfOldSubList = headOfWhereToInsert->next;
 
-            case 'c':
-                xCommand(head, tail, currentCommand.initialIndex, currentCommand.finalIndex);
-                break;
-            case 'd':
-                yCommand(head, tail, currentCommand.initialIndex, currentCommand.finalIndex);
-                break;
+    if (!tailOfWhereToInsert) tailOfOldSubList = listTail;
+    else tailOfOldSubList = tailOfWhereToInsert->previous;
+
+    if (!headOfWhereToInsert && !tailOfWhereToInsert) {
+        listHead = NULL;
+        listTail = NULL;
+    } else if (!headOfWhereToInsert) {
+        listHead = tailOfWhereToInsert;
+        listHead->previous = NULL;
+    } else if (!tailOfWhereToInsert) {
+        listTail = headOfWhereToInsert;
+        listTail->next = NULL;
+    } else {
+        headOfWhereToInsert->next = tailOfWhereToInsert;
+        tailOfWhereToInsert->previous = headOfWhereToInsert;
+    }
+
+    //if (headOfOldSubList) headOfOldSubList->previous = NULL;
+    //if (tailOfOldSubList) tailOfOldSubList->next = NULL;
+
+    fromStack->subListHead = headOfOldSubList;
+    fromStack->subListTail = tailOfOldSubList;
+
+    listSize -= fromStack->listSizeDelta;
+
+    pushUndo(fromStack);
+}
+
+void pCommand(int index1, int index2) {
+
+    ListNode *temp = NULL;
+    int i;
+
+    //Sanitize input
+    if (index1 == 0) {
+        index1 = 1;
+        //Edge case
+        if (index2 == 0) {
+            fputs(".\n", stdout);
+            return;
         }
     }
 
-    commandHistoryCurrentCommand -= num;
+    //Travel to first node to be printed
+    temp = travelToNode(index1, 1, listHead);
+
+    //Print existing nodes
+    for (i = index1; temp && i <= index2; i++) {
+        fputs(temp->data, stdout);
+        temp = temp->next;
+    }
+
+    //Print ".\n" if requested nodes do not exist
+    for (; i <= index2; i++) fputs(".\n", stdout);
 }
 
-void redo(nodeLine *head, nodeLine **tail, int num) {
+void xCommand() {
 
-    commandType currentCommand;
+    //Ausiliary variables
+    ListNode *headOfNewSubList = NULL, *tailOfNewSubList = NULL, *headOfWhereToInsert = NULL,
+            *tailOfWhereToInsert = NULL, *headOfOldSubList = NULL, *tailOfOldSubList = NULL;
 
-    for (int i = 0; i < num; i++) {
+    //Pop subList from undo stack
+    StackNode *fromStack = NULL;
+    fromStack = popUndo();
+    fromStack->next = NULL;
 
-        currentCommand = commandHistory[commandHistoryCurrentCommand + i];
+    //Set up ausiliary variables
+    headOfOldSubList = fromStack->subListHead;
+    tailOfOldSubList = fromStack->subListTail;
+    headOfWhereToInsert = fromStack->headOfWhereToInsert;
+    tailOfWhereToInsert = fromStack->tailOfWhereToInsert;
+
+    //Find where the head of subList I'm removing is
+    if (headOfWhereToInsert) headOfNewSubList = headOfWhereToInsert->next;
+    else headOfNewSubList = listHead;
+
+    //Find where the tail of subList I'm removing is
+    if (tailOfWhereToInsert) tailOfNewSubList = tailOfWhereToInsert->previous;
+    else tailOfNewSubList = listTail;
+
+    //Actual switch of sublists
+
+    //Case where all of current list is going to be removed
+    if (!fromStack->headOfWhereToInsert && !fromStack->tailOfWhereToInsert) {
+
+        listHead = headOfOldSubList;
+        if (tailOfOldSubList) {
+            listTail = tailOfOldSubList;
+        } else {
+            listTail = listHead;
+        }
+
+        //Case where the tail will be removed
+    } else if (!fromStack->tailOfWhereToInsert) {
+
+        fromStack->headOfWhereToInsert->next = headOfOldSubList;
+        if (headOfOldSubList) headOfOldSubList->previous = fromStack->headOfWhereToInsert;
+        if (tailOfOldSubList) listTail = tailOfOldSubList;
+        else listTail = fromStack->headOfWhereToInsert;
+
+        //Case where the head will be removed
+    } else if (!fromStack->headOfWhereToInsert) {
+
+        fromStack->tailOfWhereToInsert->previous = tailOfOldSubList;
+        if (tailOfOldSubList) fromStack->subListTail->next = fromStack->tailOfWhereToInsert;
+        listHead = headOfOldSubList;
+
+        //Average case
+    } else {
+
+        fromStack->headOfWhereToInsert->next = headOfOldSubList;
+        fromStack->subListHead->previous = fromStack->headOfWhereToInsert;
+        fromStack->tailOfWhereToInsert->previous = tailOfOldSubList;
+        fromStack->subListTail->next = fromStack->tailOfWhereToInsert;
+
+    }
+    //Update listSize
+    listSize -= fromStack->listSizeDelta;
+
+    //Setup fromStack with new data and push it to redo stack
+    fromStack->subListHead = headOfNewSubList;
+    fromStack->subListTail = tailOfNewSubList;
+    if (headOfNewSubList) fromStack->subListHead->previous = NULL;
+    if (tailOfNewSubList) fromStack->subListTail->next = NULL;
+    pushRedo(fromStack);
+}
+
+void yCommand() {
+
+    StackNode *fromStack = NULL;
+    ListNode *headOfSubListFromStack = NULL, *tailOfSubListFromStack = NULL,
+            *headOfWhereToInsert = NULL, *tailOfWhereToInsert = NULL;
+
+    fromStack = popUndo();
+    fromStack->next = NULL;
+
+    headOfSubListFromStack = fromStack->subListHead;
+    tailOfSubListFromStack = fromStack->subListTail;
+    headOfWhereToInsert = fromStack->headOfWhereToInsert;
+    tailOfWhereToInsert = fromStack->tailOfWhereToInsert;
+
+    if (!headOfWhereToInsert && !tailOfWhereToInsert) {
+        listHead = headOfSubListFromStack;
+        listTail = tailOfSubListFromStack;
+    } else if (!headOfWhereToInsert) {
+        listHead = headOfSubListFromStack;
+        tailOfWhereToInsert->previous = tailOfSubListFromStack;
+        tailOfSubListFromStack->next = tailOfWhereToInsert;
+    } else if (!tailOfWhereToInsert) {
+        listTail = tailOfSubListFromStack;
+        headOfWhereToInsert->next = headOfSubListFromStack;
+        headOfSubListFromStack->previous = headOfWhereToInsert;
+    } else {
+        headOfWhereToInsert->next = headOfSubListFromStack;
+        headOfSubListFromStack->previous = headOfWhereToInsert;
+        tailOfWhereToInsert->previous = tailOfSubListFromStack;
+        tailOfSubListFromStack->next = tailOfWhereToInsert;
+    }
+
+    listSize += fromStack->listSizeDelta;
+
+    fromStack->subListHead = NULL;
+    fromStack->subListTail = NULL;
+
+    pushRedo(fromStack);
+}
+
+// Undo and Redo controllers
+
+void undoController(int numberOfUndos) {
+
+    CommandType currentCommand;
+    for (int i = 1; i <= numberOfUndos; i++) {
+        currentCommand = commandArray[commandArrayCurrentCommand - i];
         switch (currentCommand.command) {
-
             case 'c':
-                cCommand(head, tail, currentCommand.initialIndex, currentCommand.finalIndex, true);
+                xCommand();
                 break;
             case 'd':
-                dCommand(head, tail, currentCommand.initialIndex, currentCommand.finalIndex);
+                if (currentCommand.initialIndex == 0 && currentCommand.finalIndex == 0) break;
+                yCommand();
                 break;
         }
     }
-
-    commandHistoryCurrentCommand += num;
+    commandArrayCurrentCommand -= numberOfUndos;
 }
+
+void redoController(int numberOfRedos) {
+
+    CommandType currentCommand;
+    for (int i = 0; i < numberOfRedos; i++) {
+        currentCommand = commandArray[commandArrayCurrentCommand + i];
+        switch (currentCommand.command) {
+            case 'c':
+                cCommandFromRedo();
+                break;
+            case 'd':
+                if (currentCommand.initialIndex == 0 && currentCommand.finalIndex == 0) break;
+                dCommandFromRedo();
+                break;
+        }
+    }
+    commandArrayCurrentCommand += numberOfRedos;
+}
+
+bool executeUndoOrRedo() {
+
+    int num = undoTarget - commandArrayCurrentCommand;
+
+    if (num < 0) {
+        undoController(num * -1);
+    } else if (num > 0) {
+        redoController(num);
+    }
+
+    return true;
+}
+
+// Main
 
 int main() {
 
-    //Initializing index and flag variables for parsing
-    commandType currentCommand;
-    bool comma, didUndo;
-    int i, undoTarget = 0, redoCounter = 0, maxUndo = 0, maxRedo = 0;
-    commandHistory = malloc(commandHistoryMaxElements * sizeof(commandType));
+    CommandType currentCommand;
+    bool didUndo = false;
+    commandArray = malloc(COMMAND_ARRAY_INITIAL_SIZE * sizeof(CommandType));
 
-    //Initializing empty linked list
-    nodeLine *head = malloc(sizeof(nodeLine));
-    head->data = malloc(1);
-    head->next = NULL;
-
-    nodeLine *tail = head;
-
-    //Initializing input buffer
-    char buffer[MAX_INPUT_SIZE + 1];
-
-    /*
-     * Main loop:
-     * 1. Read input
-     * 2. Parse input
-     * 3. Execute desired command
-     */
-
-    //1.
     while (fgets(buffer, MAX_INPUT_SIZE, stdin) != NULL) {
 
-        //Ignore this input
         if (buffer[0] == '.') continue;
+        else if (buffer[0] == 'q') return 0;
 
-        //edU is terminated
-        if (buffer[0] == 'q') return 0;
+        currentCommand = parseCommand();
 
-        /***** Parsing of command *****/
-
-        //2.
-
-        //Initial values
-        currentCommand.initialIndex = 0;
-        currentCommand.finalIndex = 0;
-        comma = false;
-        didUndo = false;
-
-        //strlen(buffer) - 2 because I'm stopping just before hitting the char:
-        // -1 for this reason and -1 because I must consider '\0'
-        for (i = 0; i < strlen(buffer) - 2; i++) {
-
-            if (buffer[i] == ',') comma = true;
-
-            if (!comma) {
-                currentCommand.initialIndex = currentCommand.initialIndex * 10 + (buffer[i] - '0');
-            } else if (buffer[i] != ',') {
-                currentCommand.finalIndex = currentCommand.finalIndex * 10 + (buffer[i] - '0');
-            }
-        }
-
-        currentCommand.command = buffer[i];
-
-        /***** End of parsing *****/
-
-        //3.
         switch (currentCommand.command) {
 
             case 'c':
-
-                //Execute undo if I have to
-                if (undoTarget - commandHistoryCurrentCommand < 0) {
-                    undo(head, &tail, commandHistoryCurrentCommand - undoTarget);
-                    didUndo = true;
-                } else if (undoTarget - commandHistoryCurrentCommand > 0) {
-                    redo(head, &tail, undoTarget - commandHistoryCurrentCommand);
-                    didUndo = true;
-                }
-
-                //Execute cCommand
-                cCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex, false);
-
-                //
-                if (didUndo) {
-                    commandHistorySize = undoTarget;
-                    didUndo = false;
-                    //Clear redo stacks
-                    redoLinesSize = 0;
-                    redoLinesTop = NULL;
-                }
-
-                commandHistorySize = commandHistoryCurrentCommand;
-
-                //Push command to commandHistory array
+                if (undoTarget != commandArrayCurrentCommand) didUndo = executeUndoOrRedo();
+                cCommandFromMain(currentCommand.initialIndex, currentCommand.finalIndex);
+                commandArrayFixUp();
                 pushCommand(currentCommand);
-                undoTarget = commandHistoryCurrentCommand;
-
                 break;
             case 'd':
-
-                //Execute undo if I have to
-                if (undoTarget - commandHistoryCurrentCommand < 0) {
-                    undo(head, &tail, commandHistoryCurrentCommand - undoTarget);
-                    didUndo = true;
-                } else if (undoTarget - commandHistoryCurrentCommand > 0) {
-                    redo(head, &tail, undoTarget - commandHistoryCurrentCommand);
-                    didUndo = true;
+                if (undoTarget != commandArrayCurrentCommand) didUndo = executeUndoOrRedo();
+                if (isDeleteInputValid(&currentCommand)) {
+                    dCommandFromMain(currentCommand.initialIndex, currentCommand.finalIndex);
                 }
-
-                //Sanify input
-                if ((currentCommand.initialIndex == 0 && currentCommand.finalIndex == 0) ||
-                    currentCommand.initialIndex > listSize) {
-                    currentCommand.initialIndex = 0;
-                    currentCommand.finalIndex = 0;
-                } else if (currentCommand.initialIndex == 0) {
-                    currentCommand.initialIndex = 1;
-                }
-
-                if (currentCommand.finalIndex > listSize) {
-                    currentCommand.finalIndex = listSize;
-                }
-
-                //Execute dCommand
-                dCommand(head, &tail, currentCommand.initialIndex, currentCommand.finalIndex);
-
-                //
-                if (didUndo) {
-                    commandHistorySize = undoTarget;
-                    didUndo = false;
-                    //Clear redo stacks
-                    redoLinesSize = 0;
-                    redoLinesTop = NULL;
-                }
-
-                commandHistorySize = commandHistoryCurrentCommand;
-
-                //Push command to commandHistory
+                commandArrayFixUp();
                 pushCommand(currentCommand);
-                undoTarget = commandHistoryCurrentCommand;
-
                 break;
             case 'p':
-
-                //Execute undo if I have to
-                if (undoTarget - commandHistoryCurrentCommand < 0) {
-                    undo(head, &tail, commandHistoryCurrentCommand - undoTarget);
-                    commandHistoryCurrentCommand = undoTarget;
-                } else if (undoTarget - commandHistoryCurrentCommand > 0) {
-                    redo(head, &tail, undoTarget - commandHistoryCurrentCommand);
-                    commandHistoryCurrentCommand = undoTarget;
-                }
-
-                pCommand(head, currentCommand.initialIndex, currentCommand.finalIndex);
+                if (undoTarget != commandArrayCurrentCommand) executeUndoOrRedo();
+                pCommand(currentCommand.initialIndex, currentCommand.finalIndex);
                 break;
             case 'u':
-                if (undoTarget - currentCommand.initialIndex <= 0) {
-                    undoTarget = 0;
-                } else {
-                    undoTarget -= currentCommand.initialIndex;
-                }
+                if (undoTarget - currentCommand.initialIndex <= 0) undoTarget = 0;
+                else undoTarget -= currentCommand.initialIndex;
                 break;
             case 'r':
-                if (currentCommand.initialIndex + undoTarget >= commandHistorySize) {
-                    undoTarget = commandHistorySize;
-                } else {
-                    undoTarget += currentCommand.initialIndex;
-                }
+                if (undoTarget + currentCommand.initialIndex >= commandArraySize) undoTarget = commandArraySize;
+                else undoTarget += currentCommand.initialIndex;
+                break;
+        }
+        if (didUndo) {
+            didUndo = false;
+            redoLinesSize = 0;
+            redoLinesTop = NULL;
         }
     }
-    return 0;
 }
