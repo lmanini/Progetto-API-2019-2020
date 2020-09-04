@@ -96,8 +96,9 @@ void pushCommand(CommandType in) {
 //Global buffer
 char buffer[MAX_INPUT_SIZE + 1];
 
-// Utility functions
+/***** Utility functions *****/
 
+//Research function: research begins from nodeToBeginFrom or from listTail, based on which the searched node is closer to 
 ListNode *travelToNode(int indexOfTarget, int indexOfBegin, ListNode *nodeToBeginFrom) {
 
     ListNode *temp = NULL;
@@ -129,6 +130,7 @@ ListNode *travelToNode(int indexOfTarget, int indexOfBegin, ListNode *nodeToBegi
     return temp;
 }
 
+//Verifies and sanitizes a delete's command indexes
 bool isDeleteInputValid(CommandType *in) {
     if (in->initialIndex == 0 && in->finalIndex == 0) return false;
 
@@ -143,6 +145,7 @@ bool isDeleteInputValid(CommandType *in) {
     return true;
 }
 
+//Creates a new ListNode reading its content from stdin
 ListNode *createNewLineNode() {
 
     fgets(buffer, MAX_INPUT_SIZE, stdin);
@@ -155,6 +158,7 @@ ListNode *createNewLineNode() {
     return out;
 }
 
+//Creates a new StackNode with given data
 StackNode *createNewStackNode(ListNode *headOfSubList, ListNode *tailOfSubList,
                               ListNode *whereToInsertHead, ListNode *whereToInsertTail,
                               int listSizeDelta) {
@@ -170,6 +174,8 @@ StackNode *createNewStackNode(ListNode *headOfSubList, ListNode *tailOfSubList,
     return out;
 }
 
+
+//Execute a c command, whose indexes include an already existing node
 void replaceModifiedNodes(int index1, int index2, ListNode *headOfWhereToInsert, ListNode *tailOfWhereToInsert) {
 
     ListNode *temp = NULL, *iterator = headOfWhereToInsert;
@@ -201,11 +207,13 @@ void replaceModifiedNodes(int index1, int index2, ListNode *headOfWhereToInsert,
     else listTail = temp;
 }
 
+//Initialize list
 void insertFirstNodeInList(ListNode *node) {
     listHead = node;
     listTail = node;
 }
 
+//Execute c command, whose indexes do not include an existing node
 void insertAtEndList(int index1, int index2) {
 
     ListNode *temp = NULL;
@@ -231,6 +239,7 @@ void insertAtEndList(int index1, int index2) {
     listSize += nodesToBeAdded;
 }
 
+//Find and set previousOfModifiedNodes and nextOfModifiedNodes
 void gatherInformationOnModifiedNodes(ListNode *headOfModifiedNodes, ListNode *tailOfModifiedNodes,
                                       ListNode **previousOfModifiedNodes, ListNode **nextOfModifiedNodes) {
 
@@ -240,6 +249,7 @@ void gatherInformationOnModifiedNodes(ListNode *headOfModifiedNodes, ListNode *t
     else (*nextOfModifiedNodes) = NULL;
 }
 
+//Command parser from stdin to a CommandType
 CommandType parseCommand() {
 
     CommandType out;
@@ -264,6 +274,7 @@ CommandType parseCommand() {
     return out;
 }
 
+//Adjust indexes for commandArray
 void commandArrayFixUp() {
     commandArraySize = commandArrayCurrentCommand;
     undoTarget = commandArrayCurrentCommand;
@@ -271,6 +282,7 @@ void commandArrayFixUp() {
 
 // edU commands
 
+//Execute c command when called from main
 void cCommandFromMain(int index1, int index2) {
 
     ListNode *previousOfModifiedNodes = NULL, *nextOfModifiedNodes = NULL,
@@ -305,6 +317,7 @@ void cCommandFromMain(int index1, int index2) {
     );
 }
 
+//Execute c command when called from redo
 void cCommandFromRedo() {
 
     ListNode *headOfNewSubList = NULL, *tailOfNewSubList = NULL, *headOfOldSubList = NULL,
@@ -353,6 +366,7 @@ void cCommandFromRedo() {
     pushUndo(fromStack);
 }
 
+//Execute d command when called from main
 void dCommandFromMain(int index1, int index2) {
 
     int nodesToDelete = index2 - index1 + 1;
@@ -394,6 +408,7 @@ void dCommandFromMain(int index1, int index2) {
                                 previousOfModifiedNodes, nextOfModifiedNodes, nodesToDelete));
 }
 
+//Execute d command when called from redo
 void dCommandFromRedo() {
 
     ListNode *headOfNewSubList = NULL, *tailOfNewSubList = NULL, *headOfOldSubList = NULL,
@@ -436,6 +451,7 @@ void dCommandFromRedo() {
     pushUndo(fromStack);
 }
 
+//Execute p command
 void pCommand(int index1, int index2) {
 
     ListNode *temp = NULL;
@@ -464,6 +480,7 @@ void pCommand(int index1, int index2) {
     for (; i <= index2; i++) fputs(".\n", stdout);
 }
 
+//Execute the inverse of a command, is only called by undo
 void xCommand() {
 
     //Ausiliary variables
@@ -536,6 +553,7 @@ void xCommand() {
     pushRedo(fromStack);
 }
 
+//Execute the inverse of a d command, is only called by undo
 void yCommand() {
 
     StackNode *fromStack = NULL;
