@@ -356,8 +356,6 @@ void cCommandFromRedo() {
         tailOfWhereToInsert->previous = tailOfNewSubList;
     }
 
-    //if (headOfOldSubList) headOfOldSubList->previous = NULL;
-    //if (tailOfOldSubList) tailOfOldSubList->next = NULL;
     fromStack->subListHead = headOfOldSubList;
     fromStack->subListTail = tailOfOldSubList;
 
@@ -395,10 +393,6 @@ void dCommandFromMain(int index1, int index2) {
         previousOfModifiedNodes->next = nextOfModifiedNodes;
         nextOfModifiedNodes->previous = previousOfModifiedNodes;
     }
-
-    //Trim old subList
-    //headOfModifiedNodes->previous = NULL;
-    //tailOfModifiedNodes->next = NULL;
 
     //Update listSize
     listSize -= nodesToDelete;
@@ -439,9 +433,6 @@ void dCommandFromRedo() {
         headOfWhereToInsert->next = tailOfWhereToInsert;
         tailOfWhereToInsert->previous = headOfWhereToInsert;
     }
-
-    //if (headOfOldSubList) headOfOldSubList->previous = NULL;
-    //if (tailOfOldSubList) tailOfOldSubList->next = NULL;
 
     fromStack->subListHead = headOfOldSubList;
     fromStack->subListTail = tailOfOldSubList;
