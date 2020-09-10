@@ -471,7 +471,7 @@ void pCommand(int index1, int index2) {
     for (; i <= index2; i++) fputs(".\n", stdout);
 }
 
-//Execute the inverse of a command, is only called by undo
+//Execute the inverse of a c command, is only called by undo
 void xCommand() {
 
     //Ausiliary variables
