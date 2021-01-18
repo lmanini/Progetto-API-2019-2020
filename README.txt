@@ -1,4 +1,4 @@
-edU was written by Lucas J. Manini as a project for Politecnico di Milano's course "Progetto di Algoritmi e Principi dell'Informatica" in academic year 2019/2020, achieving the maximum score of 30L/30.
+edU was written by Lucas as a project for Politecnico di Milano's course "Progetto di Algoritmi e Principi dell'Informatica" in academic year 2019/2020, achieving the maximum score of 30L/30.
 
 It has been developped using the following data structures:
 
